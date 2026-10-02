@@ -110,6 +110,22 @@ def test_index_is_served(client):
     assert r.status_code == 200 and "<title>CAGED Ear Trainer</title>" in r.text
 
 
+def test_static_files_are_served(client):
+    for path in ["static/theory.js", "static/ui.js", "static/style.css", "static/main.js", "static/pages/caged.js"]:
+        assert f'"{path}"' in client.get("/").text, path      # the page links to it
+        r = client.get("/" + path)
+        assert r.status_code == 200 and len(r.text) > 100, path
+    assert client.get("/static/nothing.js").status_code == 404
+
+
+def test_caged_exercises_are_accepted(client):
+    pid = make_profile(client)
+    attempt(client, pid, exercise="caged_play", item="Minor, A shape", correct=True)
+    attempt(client, pid, exercise="caged_recognize", item="Dominant 7, E shape", answer="C shape, G7", correct=False)
+    by_ex = {e["exercise"]: e for e in client.get(f"/api/profiles/{pid}/stats").json()["exercises"]}
+    assert by_ex["caged_play"]["correct"] == 1 and by_ex["caged_recognize"]["correct"] == 0
+
+
 def test_streaks_helper():
     assert streaks([]) == (0, 0)
     assert streaks([1, 1, 0, 1]) == (1, 2)
