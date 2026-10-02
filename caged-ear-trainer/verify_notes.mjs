@@ -1,9 +1,9 @@
-// Verifies the music theory and the synthesized pitches used in index.html.
+// Verifies the music theory, the chord shapes and the synthesized pitches used by the app.
 // Run with:  node verify_notes.mjs
 //
-// The script extracts the THEORY and SYNTHESIS sections straight from index.html,
-// so it tests exactly the code the page runs. The expected answers below are
-// written out by hand from standard references, not computed by the code under test.
+// The script loads static/theory.js, the same file the page loads, so it tests exactly
+// the code the page runs. The expected answers below are written out by hand from
+// standard references, not computed by the code under test.
 
 import { readFileSync } from 'node:fs';
 
@@ -12,15 +12,13 @@ let seed = 12345;
 Math.random = () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
   t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 
-const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
-const script = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
-const block = script.slice(script.indexOf('/* ================= THEORY'), script.indexOf('/* ================= STORAGE'));
+const source = readFileSync(new URL('./static/theory.js', import.meta.url), 'utf8');
 const T = new Function(`
-  const state = { notation: 'intl', root: 'C' };
-  ${block}
-  return { TUNING, IV, ROOTS, SCALES, CHORDS, CAGED, parseNote, spell, mtof, synthPluck, synthPiano,
+  ${source}
+  return { TUNING, IV, ROOTS, SCALES, CHORDS, parseNote, spell, spellRaw, mtof, synthPluck, synthPiano,
            detectPitch, freqToMidi, foldCents, PITCH_WINDOW, intervalName, OPEN_CHORDS, TRIAD_IVS,
-           capoChord, triadVoicings, state };
+           capoChord, triadVoicings, naming, SHAPES, SHAPE_ORDER, CAGED_QUALITIES, CAGED_SCALE, gripOf,
+           shapeInstances, chordShapes, positionMidis, scalesContaining, diatonicChords, MINOR_ROOTS };
 `)();
 
 let passed = 0, failed = 0;
@@ -64,7 +62,8 @@ for (const [root, id, exp] of known) check(`${root} ${id}`, spellAll(root, T.SCA
 const chords = [
   ['A', 'maj', ['A', 'C#', 'E']], ['C', 'min', ['C', 'Eb', 'G']], ['B', 'dim', ['B', 'D', 'F']],
   ['C', 'aug', ['C', 'E', 'G#']], ['G', '7', ['G', 'B', 'D', 'F']], ['Db', 'maj7', ['Db', 'F', 'Ab', 'C']],
-  ['F#', 'm7b5', ['F#', 'A', 'C', 'E']], ['B', 'dim7', ['B', 'D', 'F', 'Ab']], ['D', 'sus4', ['D', 'G', 'A']]
+  ['F#', 'm7b5', ['F#', 'A', 'C', 'E']], ['B', 'dim7', ['B', 'D', 'F', 'Ab']], ['D', 'sus4', ['D', 'G', 'A']],
+  ['A', 'mmaj7', ['A', 'C', 'E', 'G#']], ['C', 'maj7s5', ['C', 'E', 'G#', 'B']]
 ];
 for (const [root, id, exp] of chords) check(`${root}${id}`, spellAll(root, T.CHORDS.find(c => c.id === id).iv), exp);
 
@@ -83,24 +82,28 @@ for (const root of T.ROOTS) {
 
 // 5. Norwegian note names: B means B flat and H means B natural
 console.log('5. Norwegian H/B naming');
-T.state.notation = 'no';
+T.naming.system = 'no';
 check('F major in Norwegian', spellAll('F', T.SCALES[0].iv), ['F', 'G', 'A', 'B', 'C', 'D', 'E']);
 check('G major in Norwegian', spellAll('G', T.SCALES[0].iv), ['G', 'A', 'H', 'C', 'D', 'E', 'F#']);
 check('Eb minor in Norwegian', spellAll('Eb', T.SCALES[1].iv), ['Eb', 'F', 'Gb', 'Ab', 'B', 'Cb', 'Db']);
-T.state.notation = 'intl';
+T.naming.system = 'intl';
 
-// 6. CAGED shapes: in every key, each shape contains only notes of the major triad, and all three of them
-console.log('6. CAGED shapes in all 12 keys');
+// 6. CAGED shapes: in every key, each major shape contains only notes of the major triad, and all three of them
+console.log('6. Major CAGED shapes in all 12 keys');
+check('the open major shapes are C A G E D', T.SHAPE_ORDER.map(l => T.SHAPES.maj[l]),
+  ['x 3 2 0 1 0', 'x 0 2 2 2 0', '3 2 0 0 0 3', '0 2 2 1 0 0', 'x x 0 2 3 2']);
 for (const root of T.ROOTS) {
   const rp = pcOf(root), triad = new Set([rp, (rp + 4) % 12, (rp + 7) % 12]);
-  for (const [letter, shape] of Object.entries(T.CAGED)) {
-    const shift = (rp - shape.pc + 12) % 12;
-    const pcs = shape.f.map((f, s) => f < 0 ? null : (T.TUNING[s] + f + shift) % 12).filter(x => x !== null);
-    check(`${root} ${letter}-shape only triad tones`, pcs.every(pc => triad.has(pc)), true);
-    check(`${root} ${letter}-shape has root, third and fifth`, new Set(pcs).size, 3);
-    // the lowest sounding note of each shape should be the root (true for all five classic shapes)
-    const lowest = Math.min(...shape.f.map((f, s) => f < 0 ? Infinity : T.TUNING[s] + f + shift));
-    check(`${root} ${letter}-shape bass note is the root`, lowest % 12, rp);
+  for (const letter of T.SHAPE_ORDER) {
+    const shapes = T.shapeInstances(rp, 'maj', letter);
+    check(`${root} ${letter}-shape fits on the neck at least once`, shapes.length >= 1, true);
+    for (const sh of shapes) {
+      const pcs = T.positionMidis(sh).map(m => m % 12);
+      check(`${root} ${letter}-shape only triad tones`, pcs.every(pc => triad.has(pc)), true);
+      check(`${root} ${letter}-shape has root, third and fifth`, new Set(pcs).size, 3);
+      // the lowest sounding note of each shape is the root (true for all five classic shapes)
+      check(`${root} ${letter}-shape bass note is the root`, Math.min(...T.positionMidis(sh)) % 12, rp);
+    }
   }
 }
 
@@ -205,7 +208,8 @@ for (const [iv, name] of Object.entries(NAMED)) {
 //     (W = whole step, H = half step) as in any standard theory text.
 console.log('11. Chord formulas and scale step patterns');
 const CHORD_SEMIS = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6], aug: [0, 4, 8], sus2: [0, 2, 7], sus4: [0, 5, 7],
-  '7': [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], m7b5: [0, 3, 6, 10], dim7: [0, 3, 6, 9] };
+  '7': [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], m7b5: [0, 3, 6, 10], dim7: [0, 3, 6, 9],
+  mmaj7: [0, 3, 7, 11], maj7s5: [0, 4, 8, 11] };
 for (const c of T.CHORDS) check(`chord ${c.id} formula`, c.iv.map(iv => T.IV[iv][0]), CHORD_SEMIS[c.id]);
 const STEPS = { major: 'WWHWWWH', minor: 'WHWWHWW', dorian: 'WHWWWHW', phrygian: 'HWWWHWW', lydian: 'WWWHWWH',
   mixolydian: 'WWHWWHW', harmminor: 'WHWWH3H' };
@@ -263,6 +267,113 @@ for (const ch of T.OPEN_CHORDS) {
     }
   }
 }
+
+// 13. Movable shapes for every chord type in every key. A grip may leave out the perfect fifth of a
+//     four-note chord (common in seventh-chord grips), but nothing else, and the root is always the lowest note.
+console.log('13. Movable chord shapes for all chord types and keys');
+for (const c of T.CHORDS) {
+  const letters = T.SHAPE_ORDER.filter(l => T.gripOf(c.id, l));
+  check(`${c.id} has at least three shapes`, letters.length >= 3, true);
+  for (const root of T.ROOTS) {
+    const rp = pcOf(root), need = c.iv.map(iv => (rp + T.IV[iv][0]) % 12), fifth = (rp + 7) % 12;
+    const shapes = T.chordShapes(rp, c.id);
+    check(`${root}${c.id}: every shape letter appears`, [...new Set(shapes.map(s => s.letter))].sort(), [...letters].sort());
+    for (const sh of shapes) {
+      const ms = T.positionMidis(sh), pcs = ms.map(m => m % 12);
+      const missing = need.filter(pc => !pcs.includes(pc));
+      const ok = pcs.every(pc => need.includes(pc)) && Math.min(...ms) % 12 === rp && sh.lo >= 0 && sh.hi <= 15 &&
+        sh.hi - sh.lo <= 4 && (missing.length === 0 || (c.iv.length === 4 && missing.length === 1 && missing[0] === fifth && c.iv.includes('5')));
+      check(`${root}${c.id} ${sh.letter} shape at ${sh.lo}: chord tones, root in bass, span at most 4`, ok, true);
+    }
+  }
+}
+
+// 14. Known grips, written out from standard chord charts (fret per string, low E first, -1 = muted)
+console.log('14. Known grips');
+const grip = (root, q, letter) => { const s = T.chordShapes(pcOf(root), q).find(x => x.letter === letter); return s && s.frets; };
+const KNOWN = [
+  ['A', 'maj', 'E', [5, 7, 7, 6, 5, 5]],     // A barre chord
+  ['B', 'min', 'A', [-1, 2, 4, 4, 3, 2]],    // Bm barre chord
+  ['F#', 'm7', 'E', [2, 4, 2, 2, 2, 2]],     // F#m7 barre chord
+  ['D', 'min', 'C', [-1, 5, 3, 2, 3, -1]],   // Dm from the C shape
+  ['A', '7', 'G', [5, 4, 2, 2, 2, 3]],       // A7 from the G shape
+  ['C', '7', 'A', [-1, 3, 5, 3, 5, 3]],      // C7 barre chord
+  ['G', 'maj7', 'E', [3, 5, 4, 4, 3, 3]],    // Gmaj7 barre chord
+  ['E', 'm7', 'D', [-1, -1, 2, 4, 3, 3]],    // Em7 from the D shape
+  ['C', 'm7b5', 'A', [-1, 3, 4, 3, 4, -1]],  // Cm7b5
+  ['G', 'dim7', 'E', [3, -1, 2, 3, 2, 3]],   // Gdim7
+  ['C', 'maj', 'C', [-1, 3, 2, 0, 1, 0]],    // open C
+  ['E', 'min', 'E', [0, 2, 2, 0, 0, 0]],     // open Em
+  ['G', '7', 'G', [3, 2, 0, 0, 0, 1]],       // open G7
+  ['D', 'm7', 'D', [-1, -1, 0, 2, 1, 1]]     // open Dm7
+];
+for (const [root, q, letter, frets] of KNOWN) check(`${root}${q} ${letter} shape`, grip(root, q, letter), frets);
+
+// 15. The CAGED order: going up the neck the five shapes always come as a rotation of C A G E D,
+//     for major, minor and the seventh chords alike
+console.log('15. CAGED order up the neck');
+const ROT = 'CAGEDCAGED';
+for (const q of T.CAGED_QUALITIES) for (const root of T.ROOTS) {
+  const shapes = T.chordShapes(pcOf(root), q);
+  const order = shapes.filter((s, i) => shapes.findIndex(x => x.letter === s.letter) === i).map(s => s.letter).join('');
+  check(`${root} ${q}: ${order} is a rotation of CAGED`, order.length === 5 && ROT.includes(order), true);
+}
+
+// 16. How the minor and seventh shapes come from the major shapes (the hints on the CAGED page say this):
+//     minor lowers the third one fret or drops it; 7 and maj7 turn one root (or in the C shape the fifth)
+//     into the seventh; m7 does the same to the minor shape. No other string changes.
+console.log('16. Minor and seventh shapes compared with major');
+const ivAt = (rootPc, st, f) => { const d = (T.TUNING[st] + f - rootPc + 120) % 12; return { 0: 'R', 3: 'b3', 4: '3', 7: '5', 10: 'b7', 11: '7' }[d]; };
+const RULES = {
+  min: { from: 'maj', was: ['3'], now: ['b3', '5', null] },
+  '7': { from: 'maj', was: ['R', '5'], now: ['b7'] },
+  maj7: { from: 'maj', was: ['R'], now: ['7'] },
+  m7: { from: 'min', was: ['R', '5'], now: ['b7'] }
+};
+for (const [q, rule] of Object.entries(RULES)) for (const letter of T.SHAPE_ORDER) {
+  const a = T.gripOf(rule.from, letter), b = T.gripOf(q, letter), rp = { C: 0, A: 9, G: 7, E: 4, D: 2 }[letter];
+  const changes = a.map((f, st) => f === b[st] ? null : { was: f === null ? null : ivAt(rp, st, f), now: b[st] === null ? null : ivAt(rp, st, b[st]) }).filter(Boolean);
+  check(`${q} ${letter} shape changes at least one string`, changes.length >= 1, true);
+  check(`${q} ${letter} shape only changes ${rule.was.join('/')} into ${rule.now.map(x => x || 'muted').join('/')}`,
+    changes.every(c => rule.was.includes(c.was) && rule.now.includes(c.now)), true);
+}
+// In the seventh shapes exactly one note becomes the seventh, so the outline of the shape stays
+for (const q of ['7', 'maj7', 'm7']) for (const letter of T.SHAPE_ORDER) {
+  const rp = { C: 0, A: 9, G: 7, E: 4, D: 2 }[letter], g = T.gripOf(q, letter);
+  check(`${q} ${letter} shape has exactly one seventh`, g.filter((f, st) => f !== null && ['b7', '7'].includes(ivAt(rp, st, f))).length, 1);
+}
+
+// 17. Chords built from a scale. Expected values from the diatonic triad and seventh-chord tables in
+//     standard theory texts (major: I ii iii IV V vi vii°, Imaj7 ii7 iii7 IVmaj7 V7 vi7 viiø7;
+//     harmonic minor: i(maj7) iiø7 III+maj7 iv7 V7 VImaj7 vii°7)
+console.log('17. Diatonic chords');
+const dia = (root, sc, sev) => T.diatonicChords(root, sc, sev).map(d => d.roman + ' ' + d.root + d.chord.id);
+check('C major triads', dia('C', 'major', false), ['I Cmaj', 'ii Dmin', 'iii Emin', 'IV Fmaj', 'V Gmaj', 'vi Amin', 'vii° Bdim']);
+check('C major sevenths', dia('C', 'major', true), ['Imaj7 Cmaj7', 'ii7 Dm7', 'iii7 Em7', 'IVmaj7 Fmaj7', 'V7 G7', 'vi7 Am7', 'viiø7 Bm7b5']);
+check('A natural minor triads', dia('A', 'minor', false), ['i Amin', 'ii° Bdim', 'III Cmaj', 'iv Dmin', 'v Emin', 'VI Fmaj', 'VII Gmaj']);
+check('A harmonic minor sevenths', dia('A', 'harmminor', true), ['i(maj7) Ammaj7', 'iiø7 Bm7b5', 'III+maj7 Cmaj7s5', 'iv7 Dm7', 'V7 E7', 'VImaj7 Fmaj7', 'vii°7 G#dim7']);
+check('D dorian triads', dia('D', 'dorian', false), ['i Dmin', 'ii Emin', 'III Fmaj', 'IV Gmaj', 'v Amin', 'vi° Bdim', 'VII Cmaj']);
+check('G mixolydian sevenths', dia('G', 'mixolydian', true), ['I7 G7', 'ii7 Am7', 'iiiø7 Bm7b5', 'IVmaj7 Cmaj7', 'v7 Dm7', 'vi7 Em7', 'VIImaj7 Fmaj7']);
+check('Eb major sevenths are spelled with flats', dia('Eb', 'major', true).map(x => x.split(' ')[1]), ['Ebmaj7', 'Fm7', 'Gm7', 'Abmaj7', 'Bb7', 'Cm7', 'Dm7b5']);
+check('pentatonic has no stacked-third chords', T.diatonicChords('A', 'minpenta').length, 0);
+// Every chord of every seven-note scale in every key is a known chord, and its notes as spelled from the
+// scale are the same as the chord spelled from its own root
+for (const sc of T.SCALES.filter(s => s.iv.length === 7)) for (const root of T.ROOTS) for (const sev of [false, true]) {
+  for (const d of T.diatonicChords(root, sc.id, sev)) {
+    check(`${root} ${sc.id} degree ${d.degree}${sev ? ' seventh' : ''} is a known chord`, !!d.chord, true);
+    if (d.chord) check(`${root} ${sc.id} degree ${d.degree}${sev ? ' seventh' : ''} spelling`, d.notes, d.chord.iv.map(iv => T.spellRaw(d.root, iv)));
+  }
+}
+
+// 18. Scales that fit a chord, and the usual scale for each CAGED chord (chord-scale theory:
+//     Ionian on major and maj7, Aeolian on minor, Mixolydian on 7, Dorian on m7)
+console.log('18. Scales that fit a chord');
+const fitIds = id => T.scalesContaining(T.CHORDS.find(c => c.id === id).iv).map(s => s.id);
+check('scales for maj7', fitIds('maj7'), ['major', 'lydian']);
+check('scales for 7', fitIds('7'), ['mixolydian']);
+check('scales for m7', fitIds('m7'), ['minor', 'minpenta', 'blues', 'dorian', 'phrygian']);
+check('scales for m7b5 (only the blues scale has the b5 and the b7)', fitIds('m7b5'), ['blues']);
+for (const q of T.CAGED_QUALITIES) check(`usual scale for ${q} contains the chord`, fitIds(q).includes(T.CAGED_SCALE[q]), true);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
