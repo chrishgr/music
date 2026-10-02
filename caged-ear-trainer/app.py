@@ -1,7 +1,7 @@
 """Backend for "CAGED Ear Trainer".
 
 Stores profiles and every practice attempt in a single SQLite file, and serves the
-front end (index.html) on the same address so the microphone works on localhost.
+front end (index.html and the static folder) on the same address so the microphone works on localhost.
 
 Run:
     pip install -r requirements.txt
@@ -18,6 +18,7 @@ from typing import Iterator, Literal, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -46,7 +47,7 @@ CREATE TABLE IF NOT EXISTS attempts (
 CREATE INDEX IF NOT EXISTS idx_attempts_profile ON attempts (profile_id, exercise, created_at);
 """
 
-Exercise = Literal["interval", "chord", "triad_play", "triad_recognize", "tuner_hit", "tuner_guess"]
+Exercise = Literal["interval", "chord", "triad_play", "triad_recognize", "caged_play", "caged_recognize", "tuner_hit", "tuner_guess"]
 
 
 def now_utc() -> str:
@@ -229,6 +230,9 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     @app.get("/", include_in_schema=False)
     def index():
         return FileResponse(BASE_DIR / "index.html")
+
+    # Style sheet and scripts of the front end
+    app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
     return app
 
