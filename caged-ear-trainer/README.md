@@ -9,7 +9,7 @@ note on the piano, and a click on a piano key shows every place on the neck with
 
 | Page | What it does |
 | --- | --- |
-| **Home** | One card per page, and how the pages fit together |
+| **Home** | The choice of main instrument, one card per page, and how the pages fit together |
 | **Scales** | Ten scales and modes on the whole neck or one five-fret position at a time. Play runs root to root through the position. *Chords in this scale* builds the triads or seventh chords on each degree, with Roman numerals; click one to hear it and see it inside the scale |
 | **Chords** | Fourteen chord types with movable grips shown as chord diagrams. The chosen grip is what the neck, the piano and the Play buttons use. Links to the CAGED shapes and to the scales that contain the chord |
 | **CAGED** | The five CAGED shapes for **major, minor, 7, m7 and maj7**, in neck order. *Compare with the major shape* marks which notes moved and lists the changes. A scale can be shown around the shape. *Play all five up the neck* lights each shape as it sounds. *Practice*: play a named shape on the neck, or name a shape that is shown |
@@ -19,6 +19,12 @@ note on the piano, and a click on a piano key shows every place on the neck with
 | **Ear training** | Intervals, or chord qualities, weighted towards the items you miss most |
 | **Tuner** | Tune the guitar, hit a target note with your voice or instrument, or guess a note by ear |
 | **Profile** | Only with the backend running. *Overview*: points and accuracy week by week, accuracy per exercise with its trend, and suggestions for what to practise next. *Summaries*: any day, week or month compared with the one before. *Goals*: daily, weekly and monthly goals that repeat, and long-term goals with a date. *Leaderboard*: profiles ranked by points this week, this month or overall, also per exercise |
+
+The **main instrument**, chosen on the Home page, is drawn large at the top of the Scales, Chords, CAGED,
+Triads and Progressions pages, and the other one smaller further down. With the piano as main instrument,
+the piano takes the place of the neck and the neck moves down under its own heading. The CAGED and Triads
+practice keep the neck large, because their tasks are answered on it. Choosing a main instrument also sets
+the sound of the Play buttons, which can still be changed at the top of the page.
 
 Every exercise (Play and Name the shape on the CAGED page, Play it and Recognise on the Triads page,
 both Ear training exercises, Hit the note and Guess the note) has a **Timer** box. When it is ticked, a
@@ -212,6 +218,9 @@ app also runs when `index.html` is opened directly from disk.
 - `profile.js` sends every answer (`logAttempt`) and every finished practice session (`logSession`, through
   `startSession` and `endSession` in `ui.js`) to the backend. Its charts are small SVGs drawn at the width of
   their slot, with a tooltip on hover and keyboard focus and a table view of the same numbers.
+- Each page with both instruments marks two places, `data-slot="main"` and `data-slot="second"`.
+  `placeInstruments()` in `ui.js` moves the neck and the piano (`.inst-block`) into them for the main
+  instrument before every redraw, so the code that draws them does not change.
 - `makeTimer()` is the task timer shared by every exercise. A page tells it which task is waiting for an
   answer, what to do when the time runs out and how to make the next task; the timer counts down, counts
   the task as wrong and moves on. `makeDrill()` sets one up for the CAGED and Triads practice.
