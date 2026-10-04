@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Fretboard & Keys
+# The SQLite database the backend creates on its first start (profiles, answers, goals); it stays on your computer
+gehor.db
+gehor.db-*
+# Zip archives of the app
+*.zip
+# The site the Pages workflow collects
+_site/

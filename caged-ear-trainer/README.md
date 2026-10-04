@@ -62,13 +62,24 @@ German and Nordic (H for B natural, B for B flat). The root you choose is shared
 | `static/ui.js` | Shared code: storage, sound with the notes lighting up, drawing of the neck, piano and chord diagrams, the page router and the practice drills |
 | `static/pages/*.js` | One file per page |
 | `static/main.js` | Start-up, and the controls every page shares |
+| `static/fonts/` | The three fonts (Atkinson Hyperlegible, Bricolage Grotesque, JetBrains Mono) as WOFF2 files with `fonts.css` and their SIL Open Font License texts, so the page needs nothing from other sites |
 | `app.py` | FastAPI backend that stores profiles, answers, practice time and goals in SQLite and serves the front end |
 | `stats.py` | Points, summaries, goal progress and suggestions. Pure functions with no database, tested by `test_stats.py` |
 | `requirements.txt` | Python packages for the backend and its tests |
 | `test_api.py` | Tests for the API (pytest) |
 | `test_stats.py` | Tests for `stats.py` with worked-out expected values (pytest) |
 | `verify_notes.mjs` | Tests for the theory, the chord shapes, the synthesized sound and the pitch detector (Node.js) |
-| `gehor.db` | The SQLite database. Created automatically the first time the backend starts |
+| `gehor.db` | The SQLite database, created the first time the backend starts. It holds your profiles and stays on your computer: `.gitignore` keeps it out of the repository |
+| `../.github/workflows/pages.yml` | Publishes `index.html` and `static/` to GitHub Pages |
+
+## Use it in the browser
+
+The page runs on its own, without Python: everything except the Profile page works from any static web host.
+It is published with GitHub Pages at <https://chrishgr.github.io/music/>. The workflow in
+`.github/workflows/pages.yml` runs when `index.html`, `static/` or the theory checks change on `main` (or by hand
+from the Actions tab): it runs `verify_notes.mjs`, collects only `index.html` and `static/`, and deploys them.
+The Python backend, the tests and the database are never published. Without the backend the page finds no
+`api/health`, hides the Profile tab and saves nothing; settings are kept in the browser as usual.
 
 ## Run it
 

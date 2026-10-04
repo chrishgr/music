@@ -1,0 +1,53 @@
+# Publishes Fretboard & Keys to GitHub Pages: only caged-ear-trainer/index.html and caged-ear-trainer/static/,
+# the files the page needs in the browser. The Python backend, the tests and everything else stay out of the site;
+# without the backend the page hides the Profile tab and works otherwise the same.
+name: Publish to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'caged-ear-trainer/index.html'
+      - 'caged-ear-trainer/static/**'
+      - 'caged-ear-trainer/verify_notes.mjs'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a newer push waits for the one running instead of cancelling it halfway
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # The page loads static/theory.js; these checks run that same file, so a broken scale or chord is not published
+      - name: Check the music theory
+        run: node verify_notes.mjs
+        working-directory: caged-ear-trainer
+      - name: Collect the site
+        run: |
+          mkdir _site
+          cp caged-ear-trainer/index.html _site/
+          cp -R caged-ear-trainer/static _site/
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
