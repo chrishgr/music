@@ -615,7 +615,7 @@
   <section class="page" id="page-profile" hidden>
     <div class="page-head">
       <h2>Profile</h2>
-      <p class="lede">Points, accuracy per exercise and a leaderboard. Answers are saved while a profile is chosen at the top.</p>
+      <p class="lede">Your progress, daily, weekly and monthly summaries, goals, and a points leaderboard. Answers and practice time are saved while a profile is chosen at the top.</p>
     </div>
     <p class="notice" id="noBackend" hidden>Profiles need the small Python backend. Start it with <code>uvicorn app:app</code> in the app folder and open <code>localhost:8000</code>.</p>
     <form class="new-profile" id="newProfile" autocomplete="off">
@@ -626,15 +626,63 @@
       <button class="primary" type="submit">Create profile</button>
       <p class="form-msg" id="newMsg" aria-live="polite"></p>
     </form>
-    <div id="profileStats"></div>
-    <div class="field">
-      <div class="stats-head">
-        <h3>Leaderboard</h3>
-        <select id="boardSel" aria-label="Exercise for the leaderboard"></select>
-      </div>
-      <p class="hint">One point per correct answer. On equal points, fewer attempts ranks higher.</p>
-      <div class="scroll"><table class="tbl" id="board"></table></div>
+    <nav class="subtabs" aria-label="Profile">
+      <a href="#/profile/overview" data-sub="overview">Overview</a><a href="#/profile/summary" data-sub="summary">Summaries</a><a href="#/profile/goals" data-sub="goals">Goals</a><a href="#/profile/leaderboard" data-sub="leaderboard">Leaderboard</a>
+    </nav>
+
+    <div class="sub" data-sub="overview">
+      <div id="pfOverview"></div>
     </div>
+
+    <div class="sub" data-sub="summary">
+      <div class="controls">
+        <div class="field">
+          <span class="lbl" id="lbl-sumper">Summary for</span>
+          <div class="seg" id="sumPeriod" role="group" aria-labelledby="lbl-sumper">
+            <button data-v="day">A day</button><button data-v="week">A week</button><button data-v="month">A month</button>
+          </div>
+        </div>
+        <div class="posbar">
+          <button class="ghost" id="sumPrev" aria-label="Earlier">‹ Earlier</button>
+          <button class="ghost" id="sumNow">Now</button>
+          <button class="ghost" id="sumNext" aria-label="Later">Later ›</button>
+        </div>
+      </div>
+      <div id="pfSummary"></div>
+    </div>
+
+    <div class="sub" data-sub="goals">
+      <form class="goal-form" id="goalForm" autocomplete="off">
+        <h3>New goal</h3>
+        <div class="controls">
+          <div class="field"><label class="lbl" for="gMetric">What</label><select id="gMetric"></select></div>
+          <div class="field"><label class="lbl" for="gScope">In</label><select id="gScope"></select></div>
+          <div class="field"><label class="lbl" for="gTarget" id="gUnit">Target</label><input id="gTarget" type="number" min="1" step="any" required></div>
+          <div class="field"><label class="lbl" for="gPeriod">When</label><select id="gPeriod">
+            <option value="day">Every day</option><option value="week">Every week</option><option value="month">Every month</option><option value="until">Long-term, by a date</option>
+          </select></div>
+          <div class="field" id="f-gDue"><label class="lbl" for="gDue">By</label><input id="gDue" type="date"></div>
+          <div class="field grow"><label class="lbl" for="gNote">Note (optional)</label><input id="gNote" maxlength="120" placeholder="Why this goal?"></div>
+          <button class="primary" type="submit">Add goal</button>
+        </div>
+        <p class="form-msg" id="goalMsg" aria-live="polite"></p>
+      </form>
+      <div id="pfGoals"></div>
+    </div>
+
+    <div class="sub" data-sub="leaderboard">
+      <div class="controls">
+        <div class="field">
+          <span class="lbl" id="lbl-boardper">Points for</span>
+          <div class="seg" id="boardPeriod" role="group" aria-labelledby="lbl-boardper">
+            <button data-v="week">This week</button><button data-v="month">This month</button><button data-v="all">All time</button>
+          </div>
+        </div>
+        <div class="field"><label class="lbl" for="boardSel">Exercise</label><select id="boardSel"></select></div>
+      </div>
+      <div id="pfBoard"></div>
+    </div>
+    <div class="chart-tip" id="chartTip" role="tooltip" hidden></div>
   </section>
   </main>
 </div>
