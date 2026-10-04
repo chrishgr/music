@@ -109,7 +109,7 @@ def test_delete_profile_removes_its_attempts(client, tmp_path):
 
 def test_index_is_served(client):
     r = client.get("/")
-    assert r.status_code == 200 and "<title>CAGED Ear Trainer</title>" in r.text
+    assert r.status_code == 200 and "<title>Fretboard &amp; Keys</title>" in r.text
 
 
 def test_static_files_are_served(client):

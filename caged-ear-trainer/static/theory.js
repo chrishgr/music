@@ -1,4 +1,4 @@
-/* CAGED Ear Trainer: music theory, sound synthesis and pitch detection.
+/* Fretboard & Keys: music theory, sound synthesis and pitch detection.
    Pure functions with no page or Web Audio code, so verify_notes.mjs can test exactly this file in Node. */
 
 /* ================= THEORY ================= */
@@ -208,7 +208,15 @@ function role(iv) {
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
 const chordSymbol = (root, id) => noteName(root) + chordById(id).sym;
 // The notes of a chord or scale with their role, so they can be drawn and labelled
-const tonesOf = (root, ivs) => ivs.map(iv => ({ iv, pc: (parseNote(root).pc + IV[iv][0]) % 12, role: role(iv), name: spell(root, iv) }));
+const tonesOf = (root, ivs) => ivs.map(iv => ({ iv, pc: (parseNote(root).pc + IV[iv][0]) % 12, role: role(iv), name: spell(root, iv), raw: spellRaw(root, iv) }));
+// A MIDI note named as one of the tones (so A7 has C#4, not Db4), with the octave of its letter: middle C is C4,
+// and B#3 is the same key as C4
+function pitchName(m, tones = []) {
+  const t = tones.find(x => x.pc === ((m % 12) + 12) % 12);
+  if (!t) return noteName(ROOTS[m % 12]) + (Math.floor(m / 12) - 1);
+  const p = parseNote(t.raw);
+  return t.name + (Math.round((m - NATURAL[p.L] - p.acc) / 12) - 1);
+}
 
 /* --- Chords built from a scale (diatonic harmony) ---
    Stacking every other note of a seven-note scale gives a triad on each degree, and one more third
@@ -384,6 +392,88 @@ function capoSuggestions(prog, keyPc, maxCapo = 9) {
     if (chords.every(c => openGrip(parseNote(c.shapeRoot).pc, c.q))) out.push({ capo, shapeKey: keyName(keyPc - capo, prog.mode) });
   }
   return out;
+}
+
+/* ================= PIANO =================
+   Voicings and scales for the piano as MIDI notes (middle C, C4, is 60), from the same chord and scale
+   formulas as the guitar, but laid out the way a pianist plays them instead of copied from a guitar grip.
+   Close position: every note of the chord lies within an octave above the lowest one. Root position has
+   the root at the bottom, and each inversion moves the lowest note up an octave: the 1st inversion has the
+   third at the bottom, the 2nd the fifth and, in a seventh chord, the 3rd the seventh. The ninth of an add9
+   chord is never the lowest note; in close position it sits next to the root, as a second. */
+const PIANO_LO = 36, PIANO_HI = 83;   // the keyboard drawn on the pages, C2 to B5
+const PIANO_CENTER = 62;               // one-hand voicings sit as close to middle C as they can
+const INVERSION_NAMES = ['Root position', '1st inversion', '2nd inversion', '3rd inversion'];
+const meanOf = ms => ms.reduce((a, m) => a + m, 0) / ms.length;
+// The chord with chord tone number `bass` (an index into ivs) as its lowest note, at MIDI `low`, and the
+// other notes as close above it as they go
+function closeVoicing(rootPc, ivs, bass, low) {
+  const bassSemi = IV[ivs[bass]][0];
+  return [low, ...ivs.filter((iv, k) => k !== bass).map(iv => low + ((IV[iv][0] - bassSemi) % 12 + 12) % 12)].sort((a, b) => a - b);
+}
+// Every close-position voicing of the chord whose lowest note lies from lo to hi and that fits on the keyboard
+function closeVoicings(rootPc, ivs, lo = PIANO_LO, hi = PIANO_HI) {
+  const out = [];
+  ivs.forEach((iv, k) => {
+    if (iv === '9') return;
+    const pc = (rootPc + IV[iv][0]) % 12;
+    for (let low = lo + ((pc - lo) % 12 + 12) % 12; low <= hi; low += 12) {
+      const notes = closeVoicing(rootPc, ivs, k, low);
+      if (notes[notes.length - 1] <= PIANO_HI) out.push({ inversion: k, notes });
+    }
+  });
+  return out;
+}
+// The candidate whose notes lie closest to `center` on average (the lower one when two are as close)
+const nearestTo = (cands, center) => cands.reduce((best, c) => Math.abs(meanOf(c.notes) - center) < Math.abs(meanOf(best.notes) - center) ? c : best);
+// The voicings the Chords page offers: root position and each inversion in close position, each in the octave
+// nearest middle C, and a two-hand voicing with the root in octaves in the left hand under a close-position
+// right hand. Each voicing: { id, name, bassIv, left, right, notes } with notes low to high.
+function pianoVoicings(rootPc, ivs) {
+  const out = [];
+  ivs.forEach((iv, k) => {
+    if (iv === '9') return;
+    const v = nearestTo(closeVoicings(rootPc, ivs).filter(c => c.inversion === k), PIANO_CENTER);
+    out.push({ id: k ? 'inv' + k : 'root', name: INVERSION_NAMES[k], bassIv: iv, left: [], right: v.notes, notes: v.notes });
+  });
+  const r = PIANO_LO + rootPc, left = [r, r + 12];
+  const right = nearestTo(closeVoicings(rootPc, ivs, r + 13), PIANO_CENTER + 2).notes;
+  out.push({ id: 'hands', name: 'Two hands', bassIv: '1', left, right, notes: [...left, ...right] });
+  return out;
+}
+// A scale as rising notes from the root over one or two octaves, ending on the root. One octave starts as
+// near middle C as it can (G3 to F#4); two octaves start in the octave below, so both fit on the keyboard.
+function pianoScale(rootPc, ivs, octaves = 1) {
+  const start = octaves === 2 ? 48 + rootPc : (rootPc <= 6 ? 60 : 48) + rootPc, out = [];
+  for (let o = 0; o < octaves; o++) ivs.forEach(iv => out.push(start + 12 * o + IV[iv][0]));
+  out.push(start + 12 * octaves);
+  return out;
+}
+// How far the notes of one chord are from the next: every note to the nearest note of the other chord, both ways.
+// Notes the two chords share cost nothing, and a note that moves a step costs one or two.
+function voiceDistance(a, b) {
+  const near = (x, ys) => Math.min(...ys.map(y => Math.abs(x - y)));
+  return a.reduce((n, x) => n + near(x, b), 0) + b.reduce((n, y) => n + near(y, a), 0);
+}
+// Piano voicings for a chord progression, with simple voice leading. chords: [{ rootPc, ivs, bassPc }].
+// The left hand plays the bass, the root or the bass note of a slash chord, as near the bass before as it can.
+// The right hand starts in root position near middle C, then takes the close-position inversion nearest the
+// chord before, so shared notes stay and the others move as little as they can. A small pull towards the
+// middle keeps a long progression from drifting up or down the keyboard.
+function voiceLeadProgression(chords, { center = 64, rightLo = 53, rightHi = 74, bassLo = 36, bassHi = 52, pull = 0.25 } = {}) {
+  let prevRight = null, prevBass = 45;
+  return chords.map(c => {
+    const bassPc = c.bassPc === undefined || c.bassPc === null ? c.rootPc : c.bassPc;
+    let bass = null;
+    for (let m = bassLo; m <= bassHi; m++) if (m % 12 === bassPc && (bass === null || Math.abs(m - prevBass) < Math.abs(bass - prevBass))) bass = m;
+    const cands = closeVoicings(c.rootPc, c.ivs, rightLo, rightHi);
+    const right = prevRight === null
+      ? nearestTo(cands.filter(x => x.inversion === 0), center).notes
+      : cands.map(x => ({ notes: x.notes, cost: voiceDistance(prevRight, x.notes) + pull * Math.abs(meanOf(x.notes) - center) }))
+          .reduce((best, x) => x.cost < best.cost ? x : best).notes;
+    prevRight = right; prevBass = bass;
+    return { bass, right, notes: [bass, ...right] };
+  });
 }
 
 /* ================= RHYTHM (metronome, pure functions) ================= */

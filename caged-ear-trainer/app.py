@@ -1,4 +1,4 @@
-"""Backend for "CAGED Ear Trainer".
+"""Backend for "Fretboard & Keys".
 
 Stores profiles, every practice attempt, practice sessions and goals in a single SQLite file, and serves
 the front end (index.html and the static folder) on the same address so the microphone works on localhost.
@@ -200,7 +200,7 @@ def streaks(results: list[int]) -> tuple[int, int]:
 # ---------- application ----------
 
 def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
-    app = FastAPI(title="CAGED Ear Trainer", version="1.0")
+    app = FastAPI(title="Fretboard & Keys", version="1.0")
 
     # The browser must check for a newer page and scripts on every load (a quick 304 when nothing changed),
     # otherwise it can keep showing an old version of the app for hours after an update.

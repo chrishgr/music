@@ -1,5 +1,8 @@
 /* Chord progressions: well-known progressions in any key, styles such as Acoustic Indie Folk-Pop with their own
-   voicings, a capo helper that shows which shapes to play, and Play along, which strums the chords in time */
+   voicings, a capo helper that shows which shapes to play, and Play along, which strums the chords in time.
+   In piano mode every chord gets a piano voicing instead, the bass in the left hand and the inversion nearest
+   the chord before in the right (voiceLeadProgression in theory.js), and Play along plays those. The capo is a
+   guitar matter and is left out; the neck below still shows the guitar grips. */
 const PG = { sel: 0, now: null };   // sel: the chord shown when nothing plays. now: { chord, bar, beat } while playing
 const PG_BEATS = 4, PG_COUNT_IN = 1;
 // Where the folk-pop spices are described, shown in the style card
@@ -40,6 +43,10 @@ function progGrip(c, capo) {
   }
   return { ...shape, frets: shape.frets.map(f => f < 0 ? -1 : f + capo), lo: shape.lo + capo, hi: shape.hi + capo, shape, open };
 }
+// Piano voicings for the chords, each led from the one before
+const progVoicings = chords => voiceLeadProgression(chords.map(c => ({
+  rootPc: parseNote(c.root).pc, ivs: chordById(c.q).iv, bassPc: c.bass ? parseNote(c.bass).pc : null
+})));
 // Notes of a chord, with the names they have in the shape (for the Shape names labels)
 const progTones = c => tonesOf(c.root, chordById(c.q).iv).map((t, i) => ({ ...t, shapeName: spell(c.shapeRoot, chordById(c.q).iv[i]) }));
 // The same notes as they are in the shape you finger, for the chord diagrams (which show the capo as the nut)
@@ -56,6 +63,7 @@ function hammerKind(chords, i) {
 function playProgression() {
   stopAll();
   const prog = progNow(), capo = progCapo(prog), chords = progChords(), grips = chords.map(c => progGrip(c, capo));
+  const piano = pianoMode(), voicings = piano ? progVoicings(chords) : null;
   startSession(PG, 'progressions', `${prog.nick} in ${keyLabel(rootPc(), prog.mode)}`, state.progBpm);
   const total = chords.reduce((n, c) => n + c.beats, 0), chordAt = chords.flatMap((c, i) => Array(c.beats).fill(i));
   startClock({
@@ -72,6 +80,21 @@ function playProgression() {
       const pos = b % total, ci = chordAt[pos], c = chords[ci], g = grips[ci], starts = c.beat === pos;
       if (state.progClick) clickAt(info.beat === 0 ? 'accent' : 'beat', when, state.clickVol * 0.7);
       let strokes = (STRUMS[state.progStrum] || STRUMS.beats)(info.beat, starts);
+      if (piano) {
+        // The same rhythm on the piano: the right hand plays the chord on every stroke, the left hand the bass
+        // when the chord starts and on beat 1. A sus decoration sounds only the note that moves.
+        const v = voicings[ci], prev = voicings[(ci - 1 + chords.length) % chords.length];
+        if (c.hammer && starts) {
+          v.right.filter(m => !prev.right.includes(m)).forEach(m => playAt(m, when, 'piano', null, 0.9));
+          strokes = strokes.filter(([at]) => at > 0);
+        }
+        strokes.forEach(([at, up, vol]) => {
+          if (at === 0 && (starts || info.beat === 0)) playAt(v.bass, when, 'piano', null, vol);
+          playPianoAt(v.right, when + at * info.len, { vol: vol * 0.85 });
+        });
+        atTime(when, () => { PG.now = { chord: ci, bar: Math.floor(pos / PG_BEATS), beat: pos % PG_BEATS }; renderProgressions(); });
+        return;
+      }
       if (c.hammer && starts) {   // only the moving finger sounds, the rest of the chord keeps ringing
         const prev = grips[(ci - 1 + chords.length) % chords.length];
         g.frets.forEach((f, st) => { if (f >= 0 && f !== prev.frets[st]) playAt(TUNING[st] + f, when, state.inst, noteKey(st, f), 0.9); });
@@ -86,7 +109,8 @@ function selectChord(i, sound = true) {
   const chords = progChords();
   PG.sel = (i + chords.length) % chords.length;
   stopAll(); renderProgressions();
-  if (sound) strum(progGrip(chords[PG.sel], progCapo()));
+  if (sound && pianoMode()) playPiano(progVoicings(chords)[PG.sel].notes);
+  else if (sound) strum(progGrip(chords[PG.sel], progCapo()));
 }
 // Choosing a progression with its own shapes keeps the key when it needs a capo the style uses (up to fret 5),
 // and otherwise moves to the capo the progression suggests
@@ -94,7 +118,7 @@ function selectProg(id) {
   state.prog = id; state.progStart = 0; PG.sel = 0;
   const p = baseProg();
   state.progGenre = progGenre(p);
-  if (p.family && familyCapo(p, rootPc()) > 5) state.root = ROOTS[(parseNote(p.family).pc + p.capo) % 12];
+  if (!pianoMode() && p.family && familyCapo(p, rootPc()) > 5) state.root = ROOTS[(parseNote(p.family).pc + p.capo) % 12];
   save(); stopAll(); renderProgressions();
 }
 function setCapo(capo) {
@@ -104,7 +128,8 @@ function setCapo(capo) {
 }
 
 function renderProgressions() {
-  const base = baseProg(), prog = progNow(), genre = progGenre(base), capo = progCapo(prog), chords = progChords(), pc = rootPc();
+  const base = baseProg(), prog = progNow(), genre = progGenre(base), chords = progChords(), pc = rootPc(), piano = pianoMode();
+  const capo = progCapo(prog), shown = piano ? 0 : capo;   // shown: the capo the text talks about (none on the piano)
   if (PG.sel >= chords.length) PG.sel = 0;
   const playing = PG.now && PG.now.chord !== undefined;
   const shownIdx = playing ? PG.now.chord : PG.sel, c = chords[shownIdx], grip = progGrip(c, capo), tones = progTones(c);
@@ -139,9 +164,9 @@ function renderProgressions() {
   $('pgLoop').checked = !!state.progLoop;
   $('pgPlay').textContent = PG.now ? 'Restart' : 'Play along';
 
-  $('pgTitle').textContent = `${prog.nick} in ${keyLabel(pc, prog.mode)}` + (prog.family ? `, ${prog.family} shapes, ${capo ? 'capo ' + capo : 'no capo'}` : '');
+  $('pgTitle').textContent = `${prog.nick} in ${keyLabel(pc, prog.mode)}` + (prog.family && !piano ? `, ${prog.family} shapes, ${capo ? 'capo ' + capo : 'no capo'}` : '');
   $('pgInfo').innerHTML = `<span><b>Numerals</b>${prog.chords.map(x => x[0]).join(' ')}</span><span><b>Chords</b>${chords.map(x => x.symbol).join(' ')}</span>` +
-    (capo ? `<span><b>Shapes with capo ${capo}</b>${chords.map(x => x.shapeSymbol).join(' ')}</span>` : '');
+    (shown ? `<span><b>Shapes with capo ${capo}</b>${chords.map(x => x.shapeSymbol).join(' ')}</span>` : '');
 
   // One cell per bar with a button for each chord that starts in it; a chord held over from the bar before shows a dash
   const totalBeats = chords.reduce((n, x) => n + x.beats, 0), nBars = Math.ceil(totalBeats / PG_BEATS);
@@ -152,16 +177,16 @@ function renderProgressions() {
     const n = inBar.length + (held ? 1 : 0);
     cells += `<div class="pbar${playing && PG.now.bar === b ? ' playing' : ''}" style="flex: ${n} 1 ${70 + n * 70}px"><span class="barno">${b + 1}</span>${held ? '<span class="cont">–</span>' : ''}` +
       inBar.map(x => {
-        const tag = x.borrowed ? 'borrowed' : x.hammer ? hammerKind(chords, x.i) : '';
+        const tag = x.borrowed ? 'borrowed' : x.hammer ? (piano ? 'sus' : hammerKind(chords, x.i)) : '';
         return `<button data-c="${x.i}" class="${playing && PG.now.chord === x.i ? 'now' : ''}" aria-pressed="${!playing && x.i === PG.sel}">` +
-          `<b>${x.symbol}</b><small>${x.roman}${capo ? ' · ' + x.shapeSymbol : ''}${tag ? ` <span class="tag">${tag}</span>` : ''}</small></button>`;
+          `<b>${x.symbol}</b><small>${x.roman}${shown ? ' · ' + x.shapeSymbol : ''}${tag ? ` <span class="tag">${tag}</span>` : ''}</small></button>`;
       }).join('') + '</div>';
   }
   $('pgBars').innerHTML = cells;
   const next = chords[(shownIdx + 1) % chords.length];
   $('pgPhase').textContent = PG.now && PG.now.count ? `Count-in: ${PG.now.count}`
-    : playing ? `Bar ${PG.now.bar + 1} of ${nBars}, beat ${PG.now.beat + 1}: ${c.symbol}${capo ? ` (play ${c.shapeSymbol})` : ''}. Next: ${next.symbol}`
-    : 'Click a chord or a chord diagram to hear it. Play along starts with one bar of clicks.';
+    : playing ? `Bar ${PG.now.bar + 1} of ${nBars}, beat ${PG.now.beat + 1}: ${c.symbol}${shown ? ` (play ${c.shapeSymbol})` : ''}. Next: ${next.symbol}`
+    : `Click a chord or a ${piano ? 'voicing' : 'chord diagram'} to hear it. Play along starts with one bar of clicks.`;
 
   // Capo helper
   let help;
@@ -179,7 +204,30 @@ function renderProgressions() {
   }
   $('pgCapoHelp').innerHTML = help;
 
+  const anchorsOnNeck = new Set([...anchors].map(onNeck));
+  renderNeck($('pgNeck'), {
+    capo, mutes: mutedStrings(grip),
+    dots: positionDots(grip, tones).map(d => anchorsOnNeck.has(noteKey(d.st, d.f)) ? { ...d, cls: d.cls + ' anchor' } : d),
+    bands: [{ lo: grip.lo, hi: grip.hi, label: capo ? `${c.shapeSymbol} shape` : c.symbol, cls: playing ? 'active' : '' }]
+  });
+  const roles = new Set(tones.map(t => t.role));
+  $('pgLegend').innerHTML = legendHtml(['root', 'third', 'fifth', 'seventh', 'other'].filter(k => roles.has(k)).concat(anchors.size && !piano ? ['anchor'] : []));
+
+  // Piano mode: one voicing per chord, in the order they are played, and the piano shows the one sounding
+  if (piano) {
+    const vs = progVoicings(chords), plain = x => tonesOf(x.root, chordById(x.q).iv), range = octaveRange(vs.flatMap(v => v.notes));
+    $('pgBoxes').classList.add('pianos');
+    $('pgBoxes').innerHTML = chords.map((x, i) => voicingButton(vs[i], plain(x), {
+      i, title: x.symbol, range, sub: `${pitchName(vs[i].bass, plain(x))} | ${vs[i].right.map(m => pitchName(m, plain(x))).join(' ')}`,
+      pressed: i === shownIdx, playing: playing && i === shownIdx
+    })).join('');
+    renderKeys($('pgPiano'), { byMidi: pianoMarks(vs[shownIdx].notes, plain(c)) });
+    $('pgHint').textContent = prog.about + ' On the piano the left hand plays the bass, the root or the note after the slash, and the right hand moves to the inversion nearest the chord before, so shared notes stay where they are and the others move a step or two.';
+    return;
+  }
+
   // Chord diagrams, as you see them with the capo as the nut. Anchor fingers have a dashed ring.
+  $('pgBoxes').classList.remove('pianos');
   const uniq = chords.filter((x, i) => chords.findIndex(y => y.shapeSymbol === x.shapeSymbol) === i);
   $('pgBoxes').innerHTML = uniq.map(x => {
     const g = progGrip(x, capo), i = chords.indexOf(x);
@@ -189,15 +237,7 @@ function renderProgressions() {
     });
   }).join('');
 
-  const anchorsOnNeck = new Set([...anchors].map(onNeck));
-  renderNeck($('pgNeck'), {
-    capo, mutes: mutedStrings(grip),
-    dots: positionDots(grip, tones).map(d => anchorsOnNeck.has(noteKey(d.st, d.f)) ? { ...d, cls: d.cls + ' anchor' } : d),
-    bands: [{ lo: grip.lo, hi: grip.hi, label: capo ? `${c.shapeSymbol} shape` : c.symbol, cls: playing ? 'active' : '' }]
-  });
   renderKeys($('pgPiano'), { byMidi: midiMarks(grip, tones) });
-  const roles = new Set(tones.map(t => t.role));
-  $('pgLegend').innerHTML = legendHtml(['root', 'third', 'fifth', 'seventh', 'other'].filter(k => roles.has(k)).concat(anchors.size ? ['anchor'] : []));
   $('pgHint').textContent = prog.about + (capo ? ' With the capo, the labels give the sounding notes. Choose Shape names to see the names from the shapes you finger.' : '');
 }
 

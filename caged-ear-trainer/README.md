@@ -1,4 +1,4 @@
-# CAGED Ear Trainer
+# Fretboard & Keys
 
 A practice tool for guitar and piano, with a small Python backend for profiles and scores.
 
@@ -9,22 +9,34 @@ note on the piano, and a click on a piano key shows every place on the neck with
 
 | Page | What it does |
 | --- | --- |
-| **Home** | The choice of main instrument, one card per page, and how the pages fit together |
-| **Scales** | Ten scales and modes on the whole neck or one five-fret position at a time. Play runs root to root through the position. *Chords in this scale* builds the triads or seventh chords on each degree, with Roman numerals; click one to hear it and see it inside the scale |
-| **Chords** | Fourteen chord types with movable grips shown as chord diagrams. The chosen grip is what the neck, the piano and the Play buttons use. Links to the CAGED shapes and to the scales that contain the chord |
+| **Home** | The choice of main instrument (guitar or piano), one card per page, and how the pages fit together |
+| **Scales** | Ten scales and modes on the whole neck or one five-fret position at a time. Play runs root to root through the position. *Chords in this scale* builds the triads or seventh chords on each degree, with Roman numerals; click one to hear it and see it inside the scale. In piano mode Play runs the scale up and back down the keyboard over one or two octaves, and the neck areas are hidden |
+| **Chords** | Fourteen chord types with movable grips shown as chord diagrams. The chosen grip is what the neck, the piano and the Play buttons use. Links to the CAGED shapes and to the scales that contain the chord. In piano mode the diagrams are piano voicings instead: root position, every inversion in close position near middle C, and two hands with the root in octaves in the left hand. The chosen voicing is what the piano, the text and the Play buttons use |
 | **CAGED** | The five CAGED shapes for **major, minor, 7, m7 and maj7**, in neck order. *Compare with the major shape* marks which notes moved and lists the changes. A scale can be shown around the shape. *Play all five up the neck* lights each shape as it sounds. *Practice*: play a named shape on the neck, or name a shape that is shown |
 | **Triads** | Triads from any open chord with a capo (0 to 12) on any string set, in root position and both inversions. *Practice*: play a named triad or recognise one |
-| **Progressions** | Twelve well-known chord progressions (I–V–vi–IV, the 50s progression, ii–V–I, 12-bar blues, the Andalusian cadence and more) in any major or minor key. Choose a capo and the page shows the shapes to play; it also lists the capo positions where every chord is an open chord. *Play along* counts in one bar and strums the chords in time (once per bar, every beat, down and up, or the folk strum D DU UDU), with the current bar, grip and notes lit up. Loops can start on any of their chords. The **Acoustic Indie Folk-Pop** style (in the style of Vance Joy, Jonah Kagen, Sons of the East, Hollow Coves, Matthew Mole, Ocie Elliott, The Lumineers, Buffalo Traffic Jam, Henry and the Waiter, Jack and the Waiterman and Just Pete) has seven progressions with written-out voicings that show its spices: sus hammer-ons and pull-offs, anchor fingers on fret 3 of the B and e strings (G 320033, Cadd9 x32033, Em7 022033, Dsus4 xx0233), the borrowed iv, maj7 colours, falling bass lines with slash chords, the same loop started on vi or I, and G or C shapes with a capo. Its shapes stay fixed and the capo sets the key |
+| **Progressions** | Twelve well-known chord progressions (I–V–vi–IV, the 50s progression, ii–V–I, 12-bar blues, the Andalusian cadence and more) in any major or minor key. Choose a capo and the page shows the shapes to play; it also lists the capo positions where every chord is an open chord. *Play along* counts in one bar and strums the chords in time (once per bar, every beat, down and up, or the folk strum D DU UDU), with the current bar, grip and notes lit up. Loops can start on any of their chords. The **Acoustic Indie Folk-Pop** style (in the style of Vance Joy, Jonah Kagen, Sons of the East, Hollow Coves, Matthew Mole, Ocie Elliott, The Lumineers, Buffalo Traffic Jam, Henry and the Waiter, Jack and the Waiterman and Just Pete) has seven progressions with written-out voicings that show its spices: sus hammer-ons and pull-offs, anchor fingers on fret 3 of the B and e strings (G 320033, Cadd9 x32033, Em7 022033, Dsus4 xx0233), the borrowed iv, maj7 colours, falling bass lines with slash chords, the same loop started on vi or I, and G or C shapes with a capo. Its shapes stay fixed and the capo sets the key. In piano mode every chord gets a piano voicing with voice leading, the bass in the left hand and the inversion nearest the chord before in the right, and Play along plays those in the same rhythms; the capo is left out |
 | **Metronome** | A plain metronome (30–260 BPM, 2 to 7 beats per bar, up to four notes per click, accent, tap tempo, click volume) and eight guided exercises that set it up for you: subdivision ladder, gap click, click on 2 and 4, click on the offbeat, speed trainer, spider (the neck shows the note to play in time), burst, and one minute changes with your results kept in the browser |
 | **Ear training** | Intervals, or chord qualities, weighted towards the items you miss most |
 | **Tuner** | Tune the guitar, hit a target note with your voice or instrument, or guess a note by ear |
 | **Profile** | Only with the backend running. *Overview*: points and accuracy week by week, accuracy per exercise with its trend, and suggestions for what to practise next. *Summaries*: any day, week or month compared with the one before. *Goals*: daily, weekly and monthly goals that repeat, and long-term goals with a date. *Leaderboard*: profiles ranked by points this week, this month or overall, also per exercise |
 
-The **main instrument**, chosen on the Home page, is drawn large at the top of the Scales, Chords, CAGED,
-Triads and Progressions pages, and the other one smaller further down. With the piano as main instrument,
-the piano takes the place of the neck and the neck moves down under its own heading. The CAGED and Triads
-practice keep the neck large, because their tasks are answered on it. Choosing a main instrument also sets
-the sound of the Play buttons, which can still be changed at the top of the page.
+The **main instrument**, chosen on the Home page, is drawn large at the top of the Scales, Chords and
+Progressions pages (and CAGED and Triads on the guitar), and the other one smaller further down.
+
+With the piano as main instrument (**piano mode**) the pages play the piano the way a pianist does, instead
+of turning guitar grips into keys:
+
+- Chords offers piano voicings: root position, each inversion in close position (every note within an octave)
+  in the octave nearest middle C, and two hands with the root in octaves in the left hand.
+- Progressions voices each chord with the bass in the left hand and, in the right hand, the inversion nearest
+  the chord before, so the notes two chords share stay where they are and the others move a step or two.
+- Scales plays up and back down the keyboard over one or two octaves.
+- The guitar neck further down still shows the guitar version, but it does not decide what the piano plays.
+- CAGED and Triads are about the guitar, so they are hidden: they leave the menu and the Home page, links to
+  them disappear, and their addresses lead to Home.
+
+The Play buttons sound like a **piano by default**, on both instruments. The choice at the top of the page
+switches them to the guitar sound.
 
 Every exercise (Play and Name the shape on the CAGED page, Play it and Recognise on the Triads page,
 both Ear training exercises, Hit the note and Guess the note) has a **Timer** box. When it is ticked, a
@@ -45,7 +57,7 @@ German and Nordic (H for B natural, B for B flat). The root you choose is shared
 | --- | --- |
 | `index.html` | The markup of every page |
 | `static/style.css` | All styles, light and dark |
-| `static/theory.js` | Music theory, chord shapes, sound synthesis and pitch detection. Pure functions, tested by `verify_notes.mjs` |
+| `static/theory.js` | Music theory, chord shapes, piano voicings and scales, sound synthesis and pitch detection. Pure functions, tested by `verify_notes.mjs` |
 | `static/ui.js` | Shared code: storage, sound with the notes lighting up, drawing of the neck, piano and chord diagrams, the page router and the practice drills |
 | `static/pages/*.js` | One file per page |
 | `static/main.js` | Start-up, and the controls every page shares |
@@ -160,7 +172,7 @@ Profiles have no passwords. This is meant for one computer or a home network, no
 
 ```bash
 pytest -q                 # backend and statistics: 50 tests
-node verify_notes.mjs     # theory, shapes, progressions, rhythm, sound and pitch detection: 9283 checks, about 20 seconds
+node verify_notes.mjs     # theory, shapes, piano voicings, progressions, rhythm, sound and pitch detection: 9306 checks, about 20 seconds
 ```
 
 `verify_notes.mjs` loads `static/theory.js`, the same file the page uses, and checks it against
@@ -196,6 +208,13 @@ hand-written expected answers:
     anchor grips are G 320033, Dsus4 xx0233, Em7 022033 and Cadd9 x32033 with fret 3 on B and e in all
     of them, the falling bass lines (C B A G F E D, G F# E C), the borrowed Cm in G, the sus decorations
     move one finger at a time, and the capo for each key with G and C shapes
+22. Piano: C major is C4 E4 G4, E4 G4 C5 and G3 C4 E4 in root position and its inversions, with C2 C3
+    under C4 E4 G4 for two hands; G7 has F3 G3 B3 D4 as 3rd inversion; every chord type in every key is in
+    close position with the right notes and the named bass, on the keyboard near middle C; notes are named
+    from the chord (C#4 in A7, B#3 in G#aug); every scale rises root to root over one or two octaves;
+    I–IV–V–I in C leads to C E G, C F A, B D G and back with C F G C in the bass, and the falling bass line
+    walks C B A G F E D; in every progression and key the notes two chords share stay in place and no voice
+    moves more than a major third
 
 Random noise uses a fixed seed, so every run gives the same result.
 
@@ -221,6 +240,10 @@ app also runs when `index.html` is opened directly from disk.
 - Each page with both instruments marks two places, `data-slot="main"` and `data-slot="second"`.
   `placeInstruments()` in `ui.js` moves the neck and the piano (`.inst-block`) into them for the main
   instrument before every redraw, so the code that draws them does not change.
+- Piano mode (`pianoMode()` in `ui.js`) sets the class `piano-mode` on the body; anything marked
+  `data-mode="guitar"` or `data-mode="piano"` shows only in that mode. The voicings come from
+  `pianoVoicings()`, `pianoScale()` and `voiceLeadProgression()` in `theory.js`, and `playPiano()` plays a list
+  of notes together or broken with the piano sound, lighting up only the piano.
 - `makeTimer()` is the task timer shared by every exercise. A page tells it which task is waiting for an
   answer, what to do when the time runs out and how to make the next task; the timer counts down, counts
   the task as wrong and moves on. `makeDrill()` sets one up for the CAGED and Triads practice.
@@ -267,4 +290,14 @@ The expected answers in `verify_notes.mjs` follow these references:
   the same four chords rotated for another mood, [Pianote, chord progressions for mood](https://www.pianote.com/blog/chord-progressions-for-mood/);
   the folk strum, [Good Guitarist, strumming patterns](https://goodguitarist.com/common-guitar-strumming-patterns/);
   the capo and open chords, [Guitar World, capo](https://www.guitarworld.com/lessons/how-a-capo-can-make-5-classic-songs-easier-to-play)
+- Piano voicings: close position keeps every chord note within an octave, open position spreads them wider,
+  [Voicing (music)](https://en.wikipedia.org/wiki/Voicing_(music)) and [Strum and Key, open vs. closed voicings](https://strumandkey.com/theory/open-vs-closed-voicings/);
+  root position and the inversions are named by the lowest note, [The Ultimate Piano, chord inversions](https://the-ultimate-piano.com/tutorials/chord-inversions/)
+  and [Dummies, chord inversions on the piano](https://www.dummies.com/article/academics-the-arts/music/instruments/piano/how-to-play-chord-inversions-on-the-piano-or-keyboard-153046/);
+  a seventh chord with the seventh in the bass is in third inversion, [Hooktheory, inversions of seventh chords](https://book-two.hooktheory.com/section/inversions-of-seventh-chords)
+- Voice leading on the piano: the root in the left hand and the nearest inversion in the right,
+  [PlayPiano, the nearest chord inversions](https://playpiano.com/piano-chords/play-nearest-chord-inversions-chord-progression) and
+  [Hear and Play, voice leading for triads](https://hearandplay.com/main/voice-leading-principles-for-triads-less-hand-movement-more-harmony/);
+  keep the common tone and move the other voices by step, [G Major Music Theory, common tone and nearest motion](https://www.gmajormusictheory.org/Fundamentals/Ch15.pdf)
+- Scales played up and down over one or two octaves, as in graded piano exams: [ABRSM piano syllabus](https://www.abrsm.org/sites/default/files/2024-06/Piano%202025%20&%202026%20Prac%20syllabus%2020240524_access.pdf)
 - YIN pitch detection: de Cheveigné and Kawahara (2002), [YIN, a fundamental frequency estimator for speech and music](http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf)

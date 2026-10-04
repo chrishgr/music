@@ -21,7 +21,8 @@ const T = new Function(`
            shapeInstances, chordShapes, positionMidis, scalesContaining, diatonicChords, MINOR_ROOTS,
            PROGRESSIONS, progressionChords, progressionBars, capoSuggestions, openGrip, keyName,
            beatClicks, trainerBpm, isSilentBar, ladderStep, tapTempo, spiderNotes, synthClick,
-           GENRES, rotateProgression, familyCapo, progressionAnchors, parseGrip };
+           GENRES, rotateProgression, familyCapo, progressionAnchors, parseGrip,
+           pianoVoicings, pianoScale, voiceLeadProgression, voiceDistance, PIANO_LO, PIANO_HI, pitchName, tonesOf };
 `)();
 
 let passed = 0, failed = 0;
@@ -514,6 +515,89 @@ check('capo for a key, C shapes: Eb is capo 3, F capo 5', [T.familyCapo(fp('fp-w
 const style = T.GENRES.find(g => g.id === 'folkpop');
 check('every spice opens a folk-pop progression', style.spices.every(s => folk.some(p => p.id === s.prog)), true);
 check('the style lists the eleven artists', style.artists.length, 11);
+
+// 22. Piano voicings, scales and voice leading. Close position keeps every note of a chord within an octave
+//     above the lowest one; an inversion is named by the chord tone at the bottom (root position, 1st inversion
+//     with the third, 2nd with the fifth, 3rd with the seventh). In a progression the right hand moves to the
+//     nearest inversion and keeps the notes two chords share, while the left hand plays the bass.
+console.log('22. Piano');
+const MIDI = m => NAMES[m % 12] + (Math.floor(m / 12) - 1);
+const names = ms => ms.map(MIDI).join(' ');
+const ivsOf = id => T.CHORDS.find(c => c.id === id).iv;
+const cMaj = T.pianoVoicings(0, ivsOf('maj'));
+check('C major: root position, inversions and two hands', cMaj.map(v => v.name), ['Root position', '1st inversion', '2nd inversion', 'Two hands']);
+check('C major root position at middle C', names(cMaj[0].notes), 'C4 E4 G4');
+check('C major 1st inversion has E at the bottom', names(cMaj[1].notes), 'E4 G4 C5');
+check('C major 2nd inversion has G at the bottom, around middle C', names(cMaj[2].notes), 'G3 C4 E4');
+check('C major with two hands: C in octaves in the left hand', [names(cMaj[3].left), names(cMaj[3].right)], ['C2 C3', 'C4 E4 G4']);
+const g7 = T.pianoVoicings(7, ivsOf('7'));
+check('G7 has a 3rd inversion with F, the seventh, at the bottom', [g7[3].name, names(g7[3].notes)], ['3rd inversion', 'F3 G3 B3 D4']);
+check('G7 root position', names(g7[0].notes), 'G3 B3 D4 F4');
+const add9 = T.pianoVoicings(0, ivsOf('add9'));
+check('Cadd9: the ninth is never the lowest note', add9.map(v => NAMES[v.notes[0] % 12]), ['C', 'E', 'G', 'C']);
+check('Cadd9 in close position puts D next to C', names(add9[0].notes), 'C4 D4 E4 G4');
+const a7 = T.tonesOf('A', ivsOf('7'));
+check('A7 1st inversion is named from the chord: C#, not Db', T.pianoVoicings(9, ivsOf('7'))[1].notes.map(m => plain(T.pitchName(m, a7))), ['C#4', 'E4', 'G4', 'A4']);
+check('B#3 is the key of C4: G#aug is G#3 B#3 D##4', [56, 60, 64].map(m => plain(T.pitchName(m, T.tonesOf('G#', ivsOf('aug'))))), ['G#3', 'B#3', 'D##4']);
+check('Cb4 is the key of B3', plain(T.pitchName(59, T.tonesOf('Ab', ivsOf('min')))), 'Cb4');
+let pianoBad = [];
+for (const c of T.CHORDS) for (let r = 0; r < 12; r++) {
+  const ivs = c.iv, want = [...new Set(ivs.map(iv => (r + T.IV[iv][0]) % 12))].sort((a, b) => a - b);
+  const vs = T.pianoVoicings(r, ivs);
+  if (vs.length !== ivs.filter(iv => iv !== '9').length + 1) pianoBad.push(`${c.id} ${r} count`);
+  vs.forEach((v, k) => {
+    const pcs = [...new Set(v.right.map(m => m % 12))].sort((a, b) => a - b);
+    if (JSON.stringify(pcs) !== JSON.stringify(want) || v.right.length !== ivs.length) pianoBad.push(`${c.id} ${r} ${v.id} notes`);
+    if (v.right[v.right.length - 1] - v.right[0] >= 12) pianoBad.push(`${c.id} ${r} ${v.id} not close`);
+    if (v.notes.some((m, i) => i && m <= v.notes[i - 1])) pianoBad.push(`${c.id} ${r} ${v.id} order`);
+    if (v.notes[0] < T.PIANO_LO || v.notes[v.notes.length - 1] > T.PIANO_HI) pianoBad.push(`${c.id} ${r} ${v.id} off the keyboard`);
+    if (v.id !== 'hands' && v.notes[0] % 12 !== (r + T.IV[ivs[k]][0]) % 12) pianoBad.push(`${c.id} ${r} ${v.id} wrong bass`);
+    // the octave nearest middle C: on average no more than half an octave from D4, the middle of a hand on C4
+    if (v.id !== 'hands' && Math.abs(v.notes.reduce((a, m) => a + m, 0) / v.notes.length - 62) > 6) pianoBad.push(`${c.id} ${r} ${v.id} far from middle C`);
+    if (v.id === 'hands' && !(v.left[0] % 12 === r && v.left[1] === v.left[0] + 12 && v.right[0] > v.left[1])) pianoBad.push(`${c.id} ${r} hands`);
+  });
+}
+check('every chord type in all twelve keys: close position, the right notes, the named bass, on the keyboard near middle C', pianoBad, []);
+
+const scaleIvs = id => T.SCALES.find(x => x.id === id).iv;
+check('C major scale, one octave up from middle C', names(T.pianoScale(0, scaleIvs('major'), 1)), 'C4 D4 E4 F4 G4 A4 B4 C5');
+check('A minor pentatonic, one octave', names(T.pianoScale(9, scaleIvs('minpenta'), 1)), 'A3 C4 D4 E4 G4 A4');
+const b2 = T.pianoScale(11, scaleIvs('major'), 2);
+check('B major over two octaves runs B3 to B5', [MIDI(b2[0]), MIDI(b2[b2.length - 1]), b2.length], ['B3', 'B5', 15]);
+let scaleBad = [];
+for (const sc of T.SCALES) for (let r = 0; r < 12; r++) for (const oct of [1, 2]) {
+  const ms = T.pianoScale(r, sc.iv, oct);
+  if (ms.length !== sc.iv.length * oct + 1 || ms[0] % 12 !== r || ms[ms.length - 1] !== ms[0] + 12 * oct) scaleBad.push(`${sc.id} ${r} ${oct} root`);
+  if (ms.some((m, i) => i && m <= ms[i - 1])) scaleBad.push(`${sc.id} ${r} ${oct} not rising`);
+  if (ms[0] < T.PIANO_LO || ms[ms.length - 1] > T.PIANO_HI) scaleBad.push(`${sc.id} ${r} ${oct} off the keyboard`);
+}
+check('every scale from every root, one and two octaves: rising from root to root, on the keyboard', scaleBad, []);
+
+const lead = (prog, key) => T.voiceLeadProgression(T.progressionChords(prog, key, 0).map(c => ({
+  rootPc: T.parseNote(c.root).pc, ivs: ivsOf(c.q), bassPc: c.bass ? T.parseNote(c.bass).pc : null })));
+const three = lead(T.PROGRESSIONS.find(p => p.id === 'three'), 0);
+check('I–IV–V–I in C, right hand: C E G, then C F A, B D G and back', three.map(v => names(v.right)), ['C4 E4 G4', 'C4 F4 A4', 'B3 D4 G4', 'C4 E4 G4']);
+check('I–IV–V–I in C, left hand: the roots', three.map(v => MIDI(v.bass)), ['C3', 'F2', 'G2', 'C3']);
+const iiVI = lead(T.PROGRESSIONS.find(p => p.id === 'twofive'), 0);
+check('ii7–V7: G7 keeps D and F from Dm7', [62, 65].every(m => iiVI[0].right.includes(m) && iiVI[1].right.includes(m)), true);
+check('falling bass line in C on the piano: C B A G F E D, then G', lead(T.PROGRESSIONS.find(p => p.id === 'fp-walkdown-c'), 0).map(v => MIDI(v.bass)),
+  ['C3', 'B2', 'A2', 'G2', 'F2', 'E2', 'D2', 'G2']);
+check('a common tone costs nothing, a step costs one each way', [T.voiceDistance([60, 64, 67], [60, 65, 69]), T.voiceDistance([60], [62])], [6, 4]);
+let leadBad = [], shared = 0;
+for (const p of T.PROGRESSIONS) for (let k = 0; k < 12; k++) {
+  const vs = lead(p, k), cs = T.progressionChords(p, k, 0);
+  vs.forEach((v, i) => {
+    const pcs = new Set(ivsOf(cs[i].q).map(iv => (T.parseNote(cs[i].root).pc + T.IV[iv][0]) % 12));
+    if (!v.right.every(m => pcs.has(m % 12)) || v.right.length !== ivsOf(cs[i].q).length) leadBad.push(`${p.id} ${k} ${i} notes`);
+    if (v.bass % 12 !== T.parseNote(cs[i].bass || cs[i].root).pc) leadBad.push(`${p.id} ${k} ${i} bass`);
+    if (v.right[0] <= v.bass || v.right[v.right.length - 1] > T.PIANO_HI || v.bass < T.PIANO_LO) leadBad.push(`${p.id} ${k} ${i} range`);
+    if (!i) return;
+    const a = vs[i - 1].right, b = v.right;
+    if (Math.max(...b.map(n => Math.min(...a.map(m => Math.abs(n - m))))) > 4) leadBad.push(`${p.id} ${k} ${i} leap`);
+    if (a.some(m => b.some(n => n % 12 === m % 12))) { shared++; if (!a.some(m => b.includes(m))) leadBad.push(`${p.id} ${k} ${i} common tone moved`); }
+  });
+}
+check(`every progression in every key: chord notes, the right bass, shared notes kept (${shared} changes), no voice moves more than a major third`, leadBad, []);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

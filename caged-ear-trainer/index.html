@@ -2,7 +2,7 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CAGED Ear Trainer</title>
+<title>Fretboard &amp; Keys</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -11,8 +11,8 @@
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <h1><a href="#/">CAGED Ear Trainer</a></h1>
-      <p class="lede">Scales, chords, CAGED shapes and triads on the guitar and the piano, with ear training and a tuner. Everything you play lights up where it sounds.</p>
+      <h1><a href="#/">Fretboard &amp; Keys</a></h1>
+      <p class="lede"><span data-mode="guitar">Scales, chords, CAGED shapes and triads on the guitar and the piano</span><span data-mode="piano">Scales, chord voicings and progressions on the piano and the guitar</span>, with ear training and a tuner. Everything you play lights up where it sounds.</p>
     </div>
     <div class="globals">
       <div class="field" id="f-profile" hidden>
@@ -41,8 +41,8 @@
     <a href="#/" data-page="home">Home</a>
     <a href="#/scales" data-page="scales">Scales</a>
     <a href="#/chords" data-page="chords">Chords</a>
-    <a href="#/caged" data-page="caged">CAGED</a>
-    <a href="#/triads" data-page="triads">Triads</a>
+    <a href="#/caged" data-page="caged" data-mode="guitar">CAGED</a>
+    <a href="#/triads" data-page="triads" data-mode="guitar">Triads</a>
     <a href="#/progressions" data-page="progressions">Progressions</a>
     <a href="#/metronome" data-page="metronome">Metronome</a>
     <a href="#/ear" data-page="ear">Ear training</a>
@@ -55,7 +55,7 @@
   <section class="page" id="page-home" hidden>
     <div class="page-head">
       <h2>What do you want to practise?</h2>
-      <p class="lede">Each page does one job. The root you pick is shared by Scales, Chords and CAGED, so you can look at the same key from three sides.</p>
+      <p class="lede">Each page does one job. <span data-mode="guitar">The root you pick is shared by Scales, Chords and CAGED, so you can look at the same key from three sides.</span><span data-mode="piano">The root you pick is shared by Scales and Chords, so you can look at the same key from both sides.</span></p>
     </div>
     <div class="controls">
       <div class="field">
@@ -67,10 +67,15 @@
       <p class="hint main-hint" id="mainInstHint"></p>
     </div>
     <div class="cards" id="homeCards"></div>
-    <div class="note-box">
+    <div class="note-box" data-mode="guitar">
       <b>How it fits together.</b> A <a class="more" href="#/scales">scale</a> gives the notes of a key. Stacking every other note of the scale gives its <a class="more" href="#/chords">chords</a>.
       Each chord can be played in five places on the neck, the <a class="more" href="#/caged">CAGED shapes</a>, and every shape contains small three-note <a class="more" href="#/triads">triads</a>.
       Click any note on a neck or a piano to hear it: the same pitch lights up on the other instrument.
+    </div>
+    <div class="note-box" data-mode="piano">
+      <b>How it fits together.</b> A <a class="more" href="#/scales">scale</a> gives the notes of a key. Stacking every other note of the scale gives its <a class="more" href="#/chords">chords</a>.
+      Each chord can be played in root position or turned into inversions, and in a <a class="more" href="#/progressions">progression</a> the inversion nearest the chord before keeps the hand in one place.
+      Click any note on the piano or the neck to hear it: the same pitch lights up on the other instrument.
     </div>
   </section>
 
@@ -78,7 +83,7 @@
   <section class="page" id="page-scales" hidden>
     <div class="page-head">
       <h2>Scales</h2>
-      <p class="lede">A scale on the whole neck or one position at a time, and the chords that belong to it. Press Play and watch each note light up as it sounds.</p>
+      <p class="lede"><span data-mode="guitar">A scale on the whole neck or one position at a time, and the chords that belong to it.</span><span data-mode="piano">A scale on the keyboard, played up and down over one or two octaves, and the chords that belong to it.</span> Press Play and watch each note light up as it sounds.</p>
     </div>
     <div class="controls">
       <div class="field">
@@ -91,7 +96,13 @@
         <label class="lbl" for="scaleSel">Scale</label>
         <select id="scaleSel"></select>
       </div>
-      <div class="field">
+      <div class="field" data-mode="piano">
+        <span class="lbl" id="lbl-scoct">Play</span>
+        <div class="seg" id="scOct" role="group" aria-labelledby="lbl-scoct">
+          <button data-v="1">One octave</button><button data-v="2">Two octaves</button>
+        </div>
+      </div>
+      <div class="field" data-mode="guitar">
         <label class="lbl" for="scalePos">Neck area</label>
         <div class="posbar">
           <button class="ghost" id="scPrev" aria-label="Lower neck area">‹</button>
@@ -147,7 +158,7 @@
   <section class="page" id="page-chords" hidden>
     <div class="page-head">
       <h2>Chords</h2>
-      <p class="lede">Choose a chord type to see the grips for it. Click a chord diagram to hear that grip and see it on the neck and the piano.</p>
+      <p class="lede"><span data-mode="guitar">Choose a chord type to see the grips for it. Click a chord diagram to hear that grip and see it on the neck and the piano.</span><span data-mode="piano">Choose a chord type to see its piano voicings: root position, the inversions and both hands. Click a voicing to hear it and see it on the piano.</span></p>
     </div>
     <div class="controls">
       <div class="field">
@@ -170,7 +181,7 @@
         <span class="lbl">Labels</span>
         <div class="seg" data-labels role="group" aria-label="Labels"></div>
       </div>
-      <label class="check"><input type="checkbox" id="chAll"> Show the chord tones on the whole neck</label>
+      <label class="check"><input type="checkbox" id="chAll"> <span>Show the chord tones on the whole <span data-mode="guitar">neck</span><span data-mode="piano">keyboard</span></span></label>
     </div>
 
     <div class="readout">
@@ -390,7 +401,7 @@
   <section class="page" id="page-progressions" hidden>
     <div class="page-head">
       <h2>Chord progressions</h2>
-      <p class="lede">Well-known progressions in any key. With a capo the page shows which shapes to play, and Play along strums the chords in time so you can practise the changes.</p>
+      <p class="lede"><span data-mode="guitar">Well-known progressions in any key. With a capo the page shows which shapes to play, and Play along strums the chords in time so you can practise the changes.</span><span data-mode="piano">Well-known progressions in any key, with piano voicings that move to the nearest inversion. Play along plays them in time, the bass in the left hand and the chord in the right, so you can practise the changes.</span></p>
     </div>
     <div class="field">
       <span class="lbl" id="lbl-pggenre">Style</span>
@@ -410,7 +421,7 @@
         <span class="lbl" id="lbl-pgkey">Key</span>
         <div class="seg roots" id="pgKey" role="group" aria-labelledby="lbl-pgkey"></div>
       </div>
-      <div class="field">
+      <div class="field" data-mode="guitar">
         <label class="lbl" for="pgCapo">Capo</label>
         <select id="pgCapo" style="min-width:120px"></select>
       </div>
@@ -437,9 +448,9 @@
         </div>
       </div>
       <div class="field">
-        <span class="lbl" id="lbl-pgstrum">Strumming</span>
+        <span class="lbl" id="lbl-pgstrum"><span data-mode="guitar">Strumming</span><span data-mode="piano">Rhythm</span></span>
         <div class="seg" id="pgStrum" role="group" aria-labelledby="lbl-pgstrum">
-          <button data-v="bar">Once per bar</button><button data-v="beats">Every beat</button><button data-v="eighths">Down and up</button><button data-v="folk">Folk strum (D DU UDU)</button>
+          <button data-v="bar">Once per bar</button><button data-v="beats">Every beat</button><button data-v="eighths"><span data-mode="guitar">Down and up</span><span data-mode="piano">Every half beat</span></button><button data-v="folk"><span data-mode="guitar">Folk strum (D DU UDU)</span><span data-mode="piano">Folk rhythm</span></button>
         </div>
       </div>
       <label class="check"><input type="checkbox" id="pgClick"> Metronome click</label>
@@ -447,7 +458,7 @@
     </div>
     <div class="bars" id="pgBars"></div>
     <p class="phase" id="pgPhase" aria-live="polite"></p>
-    <div class="note-box" id="pgCapoHelp"></div>
+    <div class="note-box" id="pgCapoHelp" data-mode="guitar"></div>
     <div class="boxes" id="pgBoxes"></div>
     <div class="controls">
       <div class="field">
