@@ -27,7 +27,7 @@ const parseDay = s => { const [y, m, d] = s.split('-').map(Number); return new D
 const fmtDate = (s, opts = { day: 'numeric', month: 'long', year: 'numeric' }) => parseDay(s).toLocaleDateString('en-GB', opts);
 
 async function api(path, opts = {}) {
-  const r = await fetch('/api' + path + (path.includes('?') ? '&' : '?') + 'tz=' + TZ, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  const r = await fetch('api' + path + (path.includes('?') ? '&' : '?') + 'tz=' + TZ, { headers: { 'Content-Type': 'application/json' }, ...opts });
   if (!r.ok) {
     let detail = null;
     try { detail = (await r.json()).detail; } catch (e) { /* not JSON */ }
@@ -52,7 +52,7 @@ function logSession(activity, detail, seconds, bpm = null, value = null) {
 
 async function initBackend() {
   try {
-    const r = await fetch('/api/health');
+    const r = await fetch('api/health');
     API.ok = r.ok && (await r.json()).ok === true;
   } catch (e) { API.ok = false; }
   API.checked = true;
