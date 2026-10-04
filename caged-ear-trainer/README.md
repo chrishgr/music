@@ -18,7 +18,7 @@ note on the piano, and a click on a piano key shows every place on the neck with
 | **Metronome** | A plain metronome (30–260 BPM, 2 to 7 beats per bar, up to four notes per click, accent, tap tempo, click volume) and eight guided exercises that set it up for you: subdivision ladder, gap click, click on 2 and 4, click on the offbeat, speed trainer, spider (the neck shows the note to play in time), burst, and one minute changes with your results kept in the browser |
 | **Ear training** | Intervals, or chord qualities, weighted towards the items you miss most |
 | **Tuner** | Tune the guitar, hit a target note with your voice or instrument, or guess a note by ear |
-| **Profile** | Only with the backend running: profiles, points, accuracy per exercise, weakest items, the last 14 days and a leaderboard |
+| **Profile** | Only with the backend running. *Overview*: points and accuracy week by week, accuracy per exercise with its trend, and suggestions for what to practise next. *Summaries*: any day, week or month compared with the one before. *Goals*: daily, weekly and monthly goals that repeat, and long-term goals with a date. *Leaderboard*: profiles ranked by points this week, this month or overall, also per exercise |
 
 Labels on the neck can show note names, scale degrees (1 b3 5), intervals (R m3 M3 P5) or, on the Triads
 page with a capo, the note names of the shape as if there were no capo. Note names can be English (B) or
@@ -34,9 +34,11 @@ German and Nordic (H for B natural, B for B flat). The root you choose is shared
 | `static/ui.js` | Shared code: storage, sound with the notes lighting up, drawing of the neck, piano and chord diagrams, the page router and the practice drills |
 | `static/pages/*.js` | One file per page |
 | `static/main.js` | Start-up, and the controls every page shares |
-| `app.py` | FastAPI backend that stores profiles and attempts in SQLite and serves the front end |
+| `app.py` | FastAPI backend that stores profiles, answers, practice time and goals in SQLite and serves the front end |
+| `stats.py` | Points, summaries, goal progress and suggestions. Pure functions with no database, tested by `test_stats.py` |
 | `requirements.txt` | Python packages for the backend and its tests |
-| `test_api.py` | Tests for the backend (pytest) |
+| `test_api.py` | Tests for the API (pytest) |
+| `test_stats.py` | Tests for `stats.py` with worked-out expected values (pytest) |
 | `verify_notes.mjs` | Tests for the theory, the chord shapes, the synthesized sound and the pitch detector (Node.js) |
 | `gehor.db` | The SQLite database. Created automatically the first time the backend starts |
 
@@ -69,31 +71,80 @@ To use another database file, set `GEHOR_DB=/path/to/file.db` before starting.
 profiles (id, name UNIQUE, created_at)
 attempts (id, profile_id → profiles.id ON DELETE CASCADE,
           exercise, item, answer, correct 0/1, cents, created_at)
+sessions (id, profile_id → profiles.id ON DELETE CASCADE,
+          activity, detail, seconds, bpm, value, created_at)
+goals    (id, profile_id → profiles.id ON DELETE CASCADE,
+          metric, scope, target, period, due, note, created_at)
 ```
 
-Every answer is stored as one attempt. Points (correct answers), accuracy, streaks and
-weakest items are computed from the attempts with SQL, so new statistics can be added later
-without changing stored data. `exercise` is one of `interval`, `chord`, `triad_play`,
+Every answer is stored as one attempt. `exercise` is one of `interval`, `chord`, `triad_play`,
 `triad_recognize`, `caged_play`, `caged_recognize`, `tuner_hit`, `tuner_guess`.
+
+A session is practice without answers: the metronome (`metronome`), one of its exercises (`drill`, with
+the exercise in `detail`), play-along on the Progressions page (`progressions`) and one minute changes
+(`changes`, with the chord pair in `detail` and the number of changes in `value`). The metronome and
+play-along save a session when they stop, if they ran for at least 15 seconds, with the last tempo in
+`bpm`. Each saved one minute changes result is one minute of practice.
+
+Points, summaries, goal progress and suggestions are computed from these rows when they are asked for,
+so the rules can change without changing stored data. Times are stored in UTC, and the page sends its
+time zone (`tz`, minutes east of UTC) so that days start at local midnight. Weeks start on Monday.
+
+## Points, summaries and goals
+
+Points (in `stats.py`, and explained on the Leaderboard page):
+
+- A right answer gives 1 point, or 2 for *Play the triad*, *Play the CAGED shape* and *Hit the note*,
+  because playing takes more than choosing. Wrong answers give nothing, so guessing does not pay.
+- Every 10th right answer in a row gives 5 extra points.
+- Practice without answers gives 1 point a minute, at most 30 a day.
+- Every day with any practice gives 5 points, so practising often pays more than practising long.
+- On the same points, the higher share of right answers ranks first.
+
+Practice time from answers counts the gaps between answers up to 2 minutes; the first answer after a
+longer pause counts 10 seconds.
+
+A summary covers a day, a week or a month, compared with the one before. While a week or month is still
+going on, it is compared with as many days of the one before as have passed, so a half-done week is not
+measured against a whole one.
+
+A goal has a metric (points, answers, right answers, share right, minutes, days with practice, tempo or
+one minute changes), an optional exercise or chord pair, a target and a period. `day`, `week` and
+`month` goals repeat, and the page shows whether the last six were reached. `until` goals are long-term
+and run from the day they were set to their date. A share-right goal counts only after 10 answers in the
+period. A goal is *behind* when it has less than 80 % of what an even pace would have reached by now.
+
+Suggestions come from the same numbers: goals that are behind, items with less than 70 % right in the
+last 60 days, exercises that dropped or improved by 15 or 10 percentage points between the last two
+fortnights, exercises not practised for a week, few practice days, exercises never tried, and no goals.
 
 ## API
 
 | Method and path | What it does |
 | --- | --- |
 | `GET /api/health` | `{"ok": true}`, used by the page to detect the backend |
-| `GET /api/profiles` | All profiles with attempts, correct answers and accuracy |
+| `GET /api/scoring` | The numbers of the points system |
+| `GET /api/profiles` | All profiles with attempts, correct answers, accuracy and points |
 | `POST /api/profiles` | Create a profile, body `{"name": "..."}` (1 to 40 characters, unique ignoring case) |
-| `DELETE /api/profiles/{id}` | Delete a profile and all its attempts |
+| `DELETE /api/profiles/{id}` | Delete a profile and everything saved for it |
 | `POST /api/attempts` | Save one answer |
+| `POST /api/sessions` | Save practice without answers, body `{"profile_id", "activity", "detail", "seconds", "bpm", "value"}` |
+| `GET /api/profiles/{id}/overview` | Totals, points, streaks, this day, week and month, 12 weeks of progress, accuracy per exercise with its trend, suggestions and the place on the leaderboard |
+| `GET /api/profiles/{id}/summary?period=day\|week\|month&day=YYYY-MM-DD` | The period that contains `day`, compared with the one before, with the goals reached in it |
+| `GET /api/profiles/{id}/goals` | Goals with their progress and history |
+| `POST /api/profiles/{id}/goals` | Add a goal, body `{"metric", "scope", "target", "period", "due", "note"}` |
+| `DELETE /api/goals/{id}` | Remove a goal |
 | `GET /api/profiles/{id}/stats` | Totals, streaks, per exercise, weakest items, per day |
-| `GET /api/leaderboard?exercise=...` | Profiles ranked by points, optionally for one exercise |
+| `GET /api/leaderboard?period=all\|week\|month&exercise=...` | Profiles ranked by points, optionally for one exercise |
+
+Every `GET` takes `tz`, the browser's offset from UTC in minutes.
 
 Profiles have no passwords. This is meant for one computer or a home network, not the open internet.
 
 ## Tests
 
 ```bash
-pytest -q                 # backend: 17 tests
+pytest -q                 # backend and statistics: 50 tests
 node verify_notes.mjs     # theory, shapes, progressions, rhythm, sound and pitch detection: 9283 checks, about 20 seconds
 ```
 
@@ -149,6 +200,9 @@ app also runs when `index.html` is opened directly from disk.
   sound and the lights together.
 - `makeDrill()` is the practice engine shared by the Triads and CAGED pages: new task, marks on the neck,
   check, show answer, multiple choice and scoring.
+- `profile.js` sends every answer (`logAttempt`) and every finished practice session (`logSession`, through
+  `startSession` and `endSession` in `ui.js`) to the backend. Its charts are small SVGs drawn at the width of
+  their slot, with a tooltip on hover and keyboard focus and a table view of the same numbers.
 - `startClock()` is the metronome clock used by the Metronome and Progressions pages. It looks 0.12 s ahead
   and puts every click and strum on the audio clock (`playAt`, `clickAt`, `strumAt`), so the timing stays
   exact even while the page redraws. The rhythm rules themselves (which clicks sound in a beat, the speed

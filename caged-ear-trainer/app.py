@@ -1,7 +1,8 @@
 """Backend for "CAGED Ear Trainer".
 
-Stores profiles and every practice attempt in a single SQLite file, and serves the
-front end (index.html and the static folder) on the same address so the microphone works on localhost.
+Stores profiles, every practice attempt, practice sessions and goals in a single SQLite file, and serves
+the front end (index.html and the static folder) on the same address so the microphone works on localhost.
+The statistics, points and goal progress are computed in stats.py.
 
 Run:
     pip install -r requirements.txt
@@ -12,14 +13,16 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterator, Literal, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+import stats
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DB = Path(os.environ.get("GEHOR_DB", BASE_DIR / "gehor.db"))
@@ -45,13 +48,52 @@ CREATE TABLE IF NOT EXISTS attempts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_attempts_profile ON attempts (profile_id, exercise, created_at);
+
+-- Practice without right or wrong answers: the metronome, its exercises, play-along and One minute changes
+CREATE TABLE IF NOT EXISTS sessions (
+    id          INTEGER PRIMARY KEY,
+    profile_id  INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    activity    TEXT    NOT NULL,           -- metronome, drill, progressions or changes
+    detail      TEXT,                       -- the exercise, the progression or the pair of chords
+    seconds     INTEGER NOT NULL,
+    bpm         INTEGER,                    -- the tempo at the end
+    value       INTEGER,                    -- a count, such as chord changes in one minute
+    created_at  TEXT    NOT NULL            -- when the session ended
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_profile ON sessions (profile_id, created_at);
+
+CREATE TABLE IF NOT EXISTS goals (
+    id          INTEGER PRIMARY KEY,
+    profile_id  INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    metric      TEXT    NOT NULL,           -- points, answers, correct, accuracy, minutes, days, tempo or changes
+    scope       TEXT,                       -- an exercise, an activity, a metronome exercise or a pair of chords; NULL for all
+    target      REAL    NOT NULL,
+    period      TEXT    NOT NULL,           -- day, week or month (starts again every period) or until (long-term)
+    due         TEXT,                       -- the last day of a long-term goal
+    note        TEXT,
+    created_at  TEXT    NOT NULL
+);
 """
 
 Exercise = Literal["interval", "chord", "triad_play", "triad_recognize", "caged_play", "caged_recognize", "tuner_hit", "tuner_guess"]
+Activity = Literal["metronome", "drill", "progressions", "changes"]
+Metric = Literal["points", "answers", "correct", "accuracy", "minutes", "days", "tempo", "changes"]
+Period = Literal["day", "week", "month", "until"]
+# The browser's offset from UTC in minutes, so days start at local midnight
+Tz = Query(default=0, ge=-720, le=840)
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def now_utc() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return utc_now().isoformat(timespec="seconds")
+
+
+def local_today(tz: int) -> date:
+    return stats.local_day(utc_now(), tz)
 
 
 # ---------- request and response models ----------
@@ -77,6 +119,45 @@ class AttemptIn(BaseModel):
     cents: Optional[float] = Field(default=None, ge=-2400, le=2400)
 
 
+class SessionIn(BaseModel):
+    profile_id: int
+    activity: Activity
+    detail: Optional[str] = Field(default=None, max_length=80)
+    seconds: int = Field(ge=1, le=4 * 3600)
+    bpm: Optional[int] = Field(default=None, ge=20, le=400)
+    value: Optional[int] = Field(default=None, ge=0, le=1000)
+
+
+class GoalIn(BaseModel):
+    metric: Metric
+    scope: Optional[str] = Field(default=None, max_length=80)
+    target: float = Field(gt=0, le=100000)
+    period: Period
+    due: Optional[date] = None
+    note: Optional[str] = Field(default=None, max_length=120)
+
+    @model_validator(mode="after")
+    def check(self):
+        if self.scope is not None and not self.scope.strip():
+            self.scope = None
+        if self.period == "until" and self.due is None:
+            raise ValueError("A long-term goal needs a last day.")
+        if self.period != "until":
+            self.due = None
+        if self.metric == "accuracy" and self.target > 100:
+            raise ValueError("Accuracy is at most 100 %.")
+        if self.metric == "days":
+            if self.period == "day":
+                raise ValueError("A goal for practice days needs a week, a month or a long-term period.")
+            if self.period in ("week", "month") and self.target > {"week": 7, "month": 31}[self.period]:
+                raise ValueError("There are not that many days in the period.")
+        if self.metric in ("points", "answers", "correct", "accuracy") and self.scope and self.scope not in stats.EXERCISES:
+            raise ValueError("This kind of goal can only be about one exercise with answers.")
+        if self.metric in ("minutes", "days") and self.scope and self.scope not in stats.EXERCISES + stats.ACTIVITIES:
+            raise ValueError("Unknown exercise or activity.")
+        return self
+
+
 class ProfileOut(BaseModel):
     id: int
     name: str
@@ -84,12 +165,20 @@ class ProfileOut(BaseModel):
     attempts: int
     correct: int
     accuracy: Optional[float]
+    score: int = 0
+
+
+class BoardRow(ProfileOut):
+    minutes: float = 0
+    active_days: int = 0
 
 
 # ---------- database helpers ----------
 
 def connect(path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(path)
+    # FastAPI may open the connection in one worker thread and run the endpoint in another.
+    # Each request still has its own connection and uses it one step at a time, so this is safe.
+    conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")  # SQLite leaves this off unless asked, and ON DELETE CASCADE needs it
     return conn
@@ -152,14 +241,48 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     def profile_out(row: sqlite3.Row) -> dict:
         return {**dict(row), "accuracy": accuracy(row["correct"], row["attempts"])}
 
+    def load_answers(db: sqlite3.Connection, profile_id: int) -> list[stats.Answer]:
+        return [stats.Answer(stats.parse_time(r["created_at"]), r["exercise"], r["item"], bool(r["correct"])) for r in db.execute(
+            "SELECT exercise, item, correct, created_at FROM attempts WHERE profile_id = ? ORDER BY created_at, id", (profile_id,))]
+
+    def load_sessions(db: sqlite3.Connection, profile_id: int) -> list[stats.Session]:
+        return [stats.Session(stats.parse_time(r["created_at"]), r["activity"], r["detail"], r["seconds"], r["bpm"], r["value"]) for r in db.execute(
+            "SELECT * FROM sessions WHERE profile_id = ? ORDER BY created_at, id", (profile_id,))]
+
+    def load_goals(db: sqlite3.Connection, profile_id: int) -> list[dict]:
+        return [dict(r) for r in db.execute("SELECT * FROM goals WHERE profile_id = ? ORDER BY created_at, id", (profile_id,))]
+
+    def board(db: sqlite3.Connection, period: str, exercise: Optional[str], tz: int) -> list[dict]:
+        """Every profile with its points in this week, this month or all time, best first."""
+        today = local_today(tz)
+        start, end = stats.period_bounds(period, today) if period != "all" else (date.min, date.max)
+        rows = []
+        for p in db.execute("SELECT id, name, created_at FROM profiles"):
+            answers = stats.between(load_answers(db, p["id"]), start, end, tz)
+            sessions = stats.between(load_sessions(db, p["id"]), start, end, tz)
+            if exercise:
+                answers, sessions = [a for a in answers if a.exercise == exercise], []
+            t = stats.totals(answers, sessions, tz)
+            rows.append({**dict(p), "attempts": t["answers"], "correct": t["correct"], "accuracy": t["accuracy"],
+                         "score": stats.score(answers, sessions, tz, exercise)["total"],
+                         "minutes": t["minutes"], "active_days": t["active_days"]})
+        return sorted(rows, key=lambda r: (-r["score"], -(r["accuracy"] or 0), r["attempts"], r["name"].lower()))
+
     @app.get("/api/health")
     def health() -> dict:
         return {"ok": True}
 
+    @app.get("/api/scoring")
+    def scoring() -> dict:
+        """The rules of the points system, so the page can explain them without a copy of the numbers."""
+        return {"answer_points": stats.ANSWER_POINTS, "streak_every": stats.STREAK_EVERY, "streak_bonus": stats.STREAK_BONUS,
+                "practice_points_per_day": stats.PRACTICE_POINTS_PER_DAY, "day_bonus": stats.DAY_BONUS,
+                "min_accuracy_answers": stats.MIN_ACCURACY_ANSWERS}
+
     @app.get("/api/profiles", response_model=list[ProfileOut])
-    def list_profiles(db: sqlite3.Connection = Depends(get_db)):
+    def list_profiles(tz: int = Tz, db: sqlite3.Connection = Depends(get_db)):
         rows = db.execute(PROFILE_TOTALS.format(extra_join="", where="") + " ORDER BY p.name").fetchall()
-        return [profile_out(r) for r in rows]
+        return [{**profile_out(r), "score": stats.score(load_answers(db, r["id"]), load_sessions(db, r["id"]), tz)["total"]} for r in rows]
 
     @app.post("/api/profiles", response_model=ProfileOut, status_code=201)
     def create_profile(body: ProfileIn, db: sqlite3.Connection = Depends(get_db)):
@@ -184,6 +307,92 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             (body.profile_id, body.exercise, body.item, body.answer, int(body.correct), body.cents, now_utc()),
         )
         return {"id": cur.lastrowid}
+
+    @app.post("/api/sessions", status_code=201)
+    def add_session(body: SessionIn, db: sqlite3.Connection = Depends(get_db)):
+        profile_or_404(db, body.profile_id)
+        cur = db.execute(
+            "INSERT INTO sessions (profile_id, activity, detail, seconds, bpm, value, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (body.profile_id, body.activity, body.detail, body.seconds, body.bpm, body.value, now_utc()),
+        )
+        return {"id": cur.lastrowid}
+
+    @app.get("/api/profiles/{profile_id}/overview")
+    def profile_overview(profile_id: int, tz: int = Tz, weeks: int = Query(default=12, ge=1, le=52),
+                         db: sqlite3.Connection = Depends(get_db)):
+        """Everything for the profile page: totals, points, streaks, progress per week, accuracy per
+        exercise with its trend, suggestions and the place on this week's and this month's leaderboard."""
+        profile = profile_or_404(db, profile_id)
+        today = local_today(tz)
+        answers, sessions = load_answers(db, profile_id), load_sessions(db, profile_id)
+        goals = [stats.goal_progress(g, answers, sessions, tz, today) for g in load_goals(db, profile_id)]
+        current, best = stats.streaks(answers)
+
+        def window(kind: str) -> dict:
+            start, end = stats.period_bounds(kind, today)
+            return stats.totals(stats.between(answers, start, end, tz), stats.between(sessions, start, end, tz), tz)
+
+        def before(kind: str) -> dict:
+            start, _ = stats.period_bounds(kind, today)
+            pstart, pend, _ = stats.compare_period(kind, start, today)
+            return {"start": pstart.isoformat(), "end": (pend - timedelta(days=1)).isoformat(),
+                    **stats.totals(stats.between(answers, pstart, pend, tz), stats.between(sessions, pstart, pend, tz), tz)}
+
+        def rank(period: str) -> dict:
+            rows = board(db, period, None, tz)
+            return {"rank": next(i + 1 for i, r in enumerate(rows) if r["id"] == profile_id), "of": len(rows)}
+
+        return {
+            "profile": {"id": profile["id"], "name": profile["name"], "created_at": profile["created_at"]},
+            "today": today.isoformat(),
+            "totals": stats.totals(answers, sessions, tz),
+            "score": stats.score(answers, sessions, tz),
+            "streak": {"current": current, "best": best},
+            "practice_streak": stats.practice_streak(answers, sessions, tz, today),
+            "periods": {"day": window("day"), "week": window("week"), "month": window("month")},
+            "same_days_before": {"week": before("week"), "month": before("month")},
+            "progress": stats.progress(answers, sessions, tz, today, weeks),
+            "exercises": stats.exercise_trends(answers, tz, today),
+            "suggestions": stats.suggestions(answers, sessions, goals, tz, today),
+            "rank": {"week": rank("week"), "month": rank("month")},
+        }
+
+    @app.get("/api/profiles/{profile_id}/summary")
+    def profile_summary(profile_id: int, period: Literal["day", "week", "month"] = "week", day: Optional[date] = None,
+                        tz: int = Tz, db: sqlite3.Connection = Depends(get_db)):
+        """The day, week or month that contains `day` (today when left out), compared with the one before."""
+        profile_or_404(db, profile_id)
+        answers, sessions = load_answers(db, profile_id), load_sessions(db, profile_id)
+        result = stats.summary(answers, sessions, period, day or local_today(tz), tz, local_today(tz))
+        start, end = date.fromisoformat(result["period"]["start"]), date.fromisoformat(result["period"]["end"])
+        result["goals_met"] = [g for g in (stats.goal_progress(g, answers, sessions, tz, min(end, local_today(tz)))
+                                           for g in load_goals(db, profile_id) if g["period"] == period) if g["met"]]
+        return result
+
+    @app.get("/api/profiles/{profile_id}/goals")
+    def list_goals(profile_id: int, tz: int = Tz, db: sqlite3.Connection = Depends(get_db)):
+        profile_or_404(db, profile_id)
+        today = local_today(tz)
+        answers, sessions = load_answers(db, profile_id), load_sessions(db, profile_id)
+        return [stats.goal_progress(g, answers, sessions, tz, today) for g in load_goals(db, profile_id)]
+
+    @app.post("/api/profiles/{profile_id}/goals", status_code=201)
+    def add_goal(profile_id: int, body: GoalIn, tz: int = Tz, db: sqlite3.Connection = Depends(get_db)):
+        profile_or_404(db, profile_id)
+        if body.due and body.due < local_today(tz):
+            raise HTTPException(status_code=422, detail="The last day of the goal has already passed.")
+        cur = db.execute(
+            "INSERT INTO goals (profile_id, metric, scope, target, period, due, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (profile_id, body.metric, body.scope, body.target, body.period, body.due.isoformat() if body.due else None, body.note, now_utc()),
+        )
+        goal = dict(db.execute("SELECT * FROM goals WHERE id = ?", (cur.lastrowid,)).fetchone())
+        return stats.goal_progress(goal, load_answers(db, profile_id), load_sessions(db, profile_id), tz, local_today(tz))
+
+    @app.delete("/api/goals/{goal_id}", status_code=204)
+    def delete_goal(goal_id: int, db: sqlite3.Connection = Depends(get_db)):
+        if db.execute("DELETE FROM goals WHERE id = ?", (goal_id,)).rowcount == 0:
+            raise HTTPException(status_code=404, detail="Goal not found.")
+        return Response(status_code=204)
 
     @app.get("/api/profiles/{profile_id}/stats")
     def profile_stats(profile_id: int, days: int = 14, db: sqlite3.Connection = Depends(get_db)):
@@ -226,15 +435,11 @@ def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
             "days": per_day,
         }
 
-    @app.get("/api/leaderboard", response_model=list[ProfileOut])
-    def leaderboard(exercise: Optional[Exercise] = None, db: sqlite3.Connection = Depends(get_db)):
-        if exercise:
-            sql = PROFILE_TOTALS.format(extra_join="AND a.exercise = ?", where="")
-            rows = db.execute(sql + " ORDER BY correct DESC, attempts ASC, p.name", (exercise,)).fetchall()
-        else:
-            sql = PROFILE_TOTALS.format(extra_join="", where="")
-            rows = db.execute(sql + " ORDER BY correct DESC, attempts ASC, p.name").fetchall()
-        return [profile_out(r) for r in rows]
+    @app.get("/api/leaderboard", response_model=list[BoardRow])
+    def leaderboard(exercise: Optional[Exercise] = None, period: Literal["all", "week", "month"] = "all",
+                    tz: int = Tz, db: sqlite3.Connection = Depends(get_db)):
+        """Profiles ranked by points (see stats.py), for all time, this week or this month, optionally one exercise."""
+        return board(db, period, exercise, tz)
 
     @app.get("/", include_in_schema=False)
     def index():

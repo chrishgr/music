@@ -56,6 +56,7 @@ function hammerKind(chords, i) {
 function playProgression() {
   stopAll();
   const prog = progNow(), capo = progCapo(prog), chords = progChords(), grips = chords.map(c => progGrip(c, capo));
+  startSession(PG, 'progressions', `${prog.nick} in ${keyLabel(rootPc(), prog.mode)}`, state.progBpm);
   const total = chords.reduce((n, c) => n + c.beats, 0), chordAt = chords.flatMap((c, i) => Array(c.beats).fill(i));
   startClock({
     bpm: () => state.progBpm,
@@ -228,7 +229,7 @@ PAGES.progressions = {
     $('pgPlay').addEventListener('click', playProgression);
     onButton($('pgBars'), b => selectChord(+b.dataset.c));
     onButton($('pgBoxes'), b => selectChord(+b.dataset.i));
-    STOP_HOOKS.push(() => { if (PG.now) { PG.now = null; if (current && current.page === 'progressions') renderProgressions(); } });
+    STOP_HOOKS.push(() => { endSession(PG); if (PG.now) { PG.now = null; if (current && current.page === 'progressions') renderProgressions(); } });
   },
   render: renderProgressions,
   keys(e, sub, buttonFocused) {

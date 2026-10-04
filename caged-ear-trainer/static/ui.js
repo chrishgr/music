@@ -120,6 +120,15 @@ function stopAll() {
   STOP_HOOKS.forEach(fn => fn());
 }
 const noteKey = (st, f) => st + ':' + f;
+// Practice time on the metronome and play-along pages. A session of at least MIN_SESSION seconds is saved
+// to the profile (logSession in profile.js) when the sound stops, with the tempo it ended at.
+const MIN_SESSION = 15;
+const startSession = (holder, activity, detail, bpm) => { holder.session = { t0: performance.now(), activity, detail, bpm }; };
+function endSession(holder) {
+  const s = holder.session;
+  holder.session = null;
+  if (s && (performance.now() - s.t0) / 1000 >= MIN_SESSION) logSession(s.activity, s.detail, (performance.now() - s.t0) / 1000, s.bpm);
+}
 // Strum a position from the lowest string up (or the highest, for an up-strum), every note lighting up where it is played
 function strumAt(p, when, inst = state.inst, { gap = 0.045, up = false, vol = 1 } = {}) {
   const notes = p.frets.map((f, k) => f < 0 ? null : { m: TUNING[p.strings[k]] + f, where: noteKey(p.strings[k], f) }).filter(Boolean);
