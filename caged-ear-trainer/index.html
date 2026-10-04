@@ -57,6 +57,15 @@
       <h2>What do you want to practise?</h2>
       <p class="lede">Each page does one job. The root you pick is shared by Scales, Chords and CAGED, so you can look at the same key from three sides.</p>
     </div>
+    <div class="controls">
+      <div class="field">
+        <span class="lbl" id="lbl-maininst">Main instrument</span>
+        <div class="seg" id="mainInst" role="group" aria-labelledby="lbl-maininst">
+          <button data-v="guitar">Guitar</button><button data-v="piano">Piano</button>
+        </div>
+      </div>
+      <p class="hint main-hint" id="mainInstHint"></p>
+    </div>
     <div class="cards" id="homeCards"></div>
     <div class="note-box">
       <b>How it fits together.</b> A <a class="more" href="#/scales">scale</a> gives the notes of a key. Stacking every other note of the scale gives its <a class="more" href="#/chords">chords</a>.
@@ -107,7 +116,12 @@
       </div>
     </div>
     <div class="legend" id="scLegend" aria-hidden="true"></div>
-    <div class="scroll"><svg class="neck" id="scNeck" role="img" aria-label="Fretboard with the scale"></svg></div>
+    <div class="inst-slot" data-slot="main">
+      <div class="inst-block" data-inst="guitar">
+        <h3 class="inst-title">The same notes on the guitar</h3>
+        <div class="scroll"><svg class="neck" id="scNeck" role="img" aria-label="Fretboard with the scale"></svg></div>
+      </div>
+    </div>
     <p class="hint" id="scHint"></p>
 
     <div class="field" id="scChordsBox">
@@ -121,8 +135,12 @@
       <div class="diatonic" id="scChords"></div>
     </div>
 
-    <h3>The same notes on the piano</h3>
-    <div class="scroll"><svg class="keys" id="scKeys" role="img" aria-label="Piano with the scale"></svg></div>
+    <div class="inst-slot" data-slot="second">
+      <div class="inst-block" data-inst="piano">
+        <h3 class="inst-title">The same notes on the piano</h3>
+        <div class="scroll"><svg class="keys" id="scKeys" role="img" aria-label="Piano with the scale"></svg></div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ CHORDS ============ -->
@@ -169,11 +187,20 @@
     </div>
     <div class="boxes" id="chBoxes"></div>
     <div class="legend" id="chLegend" aria-hidden="true"></div>
-    <div class="scroll"><svg class="neck" id="chNeck" role="img" aria-label="Fretboard with the chord"></svg></div>
+    <div class="inst-slot" data-slot="main">
+      <div class="inst-block" data-inst="guitar">
+        <h3 class="inst-title">This grip on the guitar</h3>
+        <div class="scroll"><svg class="neck" id="chNeck" role="img" aria-label="Fretboard with the chord"></svg></div>
+      </div>
+    </div>
     <p class="voicing" id="chVoicing"></p>
     <p class="hint" id="chHint"></p>
-    <h3>This grip on the piano</h3>
-    <div class="scroll"><svg class="keys" id="chKeys" role="img" aria-label="Piano with the notes of the grip"></svg></div>
+    <div class="inst-slot" data-slot="second">
+      <div class="inst-block" data-inst="piano">
+        <h3 class="inst-title">This grip on the piano</h3>
+        <div class="scroll"><svg class="keys" id="chKeys" role="img" aria-label="Piano with the notes of the grip"></svg></div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ CAGED ============ -->
@@ -253,10 +280,19 @@
     </div>
 
     <div class="legend" id="cgLegend" aria-hidden="true"></div>
-    <div class="scroll"><svg class="neck" id="cgNeck" role="img" aria-label="Fretboard with CAGED shapes"></svg></div>
+    <div class="inst-slot" data-slot="main">
+      <div class="inst-block" data-inst="guitar">
+        <h3 class="inst-title">The shapes on the guitar</h3>
+        <div class="scroll"><svg class="neck" id="cgNeck" role="img" aria-label="Fretboard with CAGED shapes"></svg></div>
+      </div>
+    </div>
     <div class="hint" id="cgHint"></div>
-    <h3 id="cgKeysTitle">The same notes on the piano</h3>
-    <div class="scroll"><svg class="keys" id="cgKeys" role="img" aria-label="Piano with the notes of the shape"></svg></div>
+    <div class="inst-slot" data-slot="second">
+      <div class="inst-block" data-inst="piano">
+        <h3 class="inst-title" id="cgKeysTitle">The same notes on the piano</h3>
+        <div class="scroll"><svg class="keys" id="cgKeys" role="img" aria-label="Piano with the notes of the shape"></svg></div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ TRIADS ============ -->
@@ -335,10 +371,19 @@
     </div>
 
     <div class="legend" id="trLegend" aria-hidden="true"></div>
-    <div class="scroll"><svg class="neck" id="trNeck" role="img" aria-label="Fretboard with triads"></svg></div>
+    <div class="inst-slot" data-slot="main">
+      <div class="inst-block" data-inst="guitar">
+        <h3 class="inst-title">The triads on the guitar</h3>
+        <div class="scroll"><svg class="neck" id="trNeck" role="img" aria-label="Fretboard with triads"></svg></div>
+      </div>
+    </div>
     <p class="hint" id="trHint"></p>
-    <h3>The same notes on the piano</h3>
-    <div class="scroll"><svg class="keys" id="trKeys" role="img" aria-label="Piano with the notes of the triad"></svg></div>
+    <div class="inst-slot" data-slot="second">
+      <div class="inst-block" data-inst="piano">
+        <h3 class="inst-title">The same notes on the piano</h3>
+        <div class="scroll"><svg class="keys" id="trKeys" role="img" aria-label="Piano with the notes of the triad"></svg></div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ PROGRESSIONS ============ -->
@@ -411,10 +456,19 @@
       </div>
     </div>
     <div class="legend" id="pgLegend" aria-hidden="true"></div>
-    <div class="scroll"><svg class="neck" id="pgNeck" role="img" aria-label="Fretboard with the chord"></svg></div>
+    <div class="inst-slot" data-slot="main">
+      <div class="inst-block" data-inst="guitar">
+        <h3 class="inst-title">The grip on the guitar</h3>
+        <div class="scroll"><svg class="neck" id="pgNeck" role="img" aria-label="Fretboard with the chord"></svg></div>
+      </div>
+    </div>
     <p class="hint" id="pgHint"></p>
-    <h3>The chord on the piano</h3>
-    <div class="scroll"><svg class="keys" id="pgPiano" role="img" aria-label="Piano with the notes of the chord"></svg></div>
+    <div class="inst-slot" data-slot="second">
+      <div class="inst-block" data-inst="piano">
+        <h3 class="inst-title">The chord on the piano</h3>
+        <div class="scroll"><svg class="keys" id="pgPiano" role="img" aria-label="Piano with the notes of the chord"></svg></div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ METRONOME ============ -->

@@ -153,6 +153,12 @@ select {
 .scroll svg { display: block; }
 svg.neck { width: 100%; min-width: 680px; height: auto; }
 svg.keys { width: 100%; max-width: 760px; min-width: 520px; height: auto; }
+/* The main instrument is large at the top of a page, the other one smaller further down */
+.inst-slot, .inst-block { display: grid; gap: 10px; min-width: 0; }
+.inst-slot[data-slot="main"] .inst-title { display: none; }
+.inst-slot[data-slot="main"] svg.keys { max-width: none; min-width: 640px; }
+.inst-slot[data-slot="second"] svg.neck { max-width: 760px; }
+.main-hint { flex: 1 1 320px; margin: 0; }
 .hint { color: var(--muted); font-size: 0.9rem; max-width: 78ch; }
 .hint p + p { margin-top: 6px; }
 .hint b { color: var(--ink); }
