@@ -102,8 +102,9 @@ select {
 .check { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; }
 .check input { accent-color: var(--accent); width: 16px; height: 16px; }
 
-/* Page links. Each page has its own address (#/scales, #/caged/practice ...), so the back button works */
-.nav { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
+/* Page links. Each page has its own address (#/scales, #/caged/practice ...), so the back button works.
+   The links wrap onto more lines on a narrow screen, so every page can always be seen. */
+.nav { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--line); }
 .nav a {
   padding: 10px 14px 11px; font-family: var(--display); font-size: 1.02rem; font-weight: 500; color: var(--muted);
   text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -1px; white-space: nowrap;
@@ -398,6 +399,7 @@ a.more { color: var(--accent); font-weight: 700; text-underline-offset: 3px; }
 .bars button.now { border-color: var(--good); box-shadow: inset 0 0 0 2px var(--good); }
 
 @media (max-width: 560px) {
+  .nav a { padding: 8px 10px 9px; font-size: 0.95rem; }
   .stage { padding: 16px; }
   select { min-width: 0; width: 100%; }
 }

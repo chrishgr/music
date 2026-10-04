@@ -57,6 +57,10 @@ The microphone (tuner) only works on a secure origin, and `localhost` counts as 
 Without the backend, `python -m http.server 8000` also works, and so does opening `index.html` directly,
 but then nothing is saved to profiles, and from a file the browser may refuse the microphone.
 
+The backend tells the browser to check for a newer version on every load, so after `git pull` a normal
+reload shows the new version. Without the backend, the browser may show the old version from its cache
+for a while: reload with Ctrl+Shift+R (Cmd+Shift+R on a Mac).
+
 To use another database file, set `GEHOR_DB=/path/to/file.db` before starting.
 
 ## Data model
@@ -89,7 +93,7 @@ Profiles have no passwords. This is meant for one computer or a home network, no
 ## Tests
 
 ```bash
-pytest -q                 # backend: 16 tests
+pytest -q                 # backend: 17 tests
 node verify_notes.mjs     # theory, shapes, progressions, rhythm, sound and pitch detection: 8242 checks, about 20 seconds
 ```
 
