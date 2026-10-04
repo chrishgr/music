@@ -10,9 +10,23 @@ const HOME_CARDS = [
   { page: 'tuner', title: 'Tuner', text: 'Tune the guitar with the microphone, hit a note with your voice or instrument, or guess a note by ear.' },
   { page: 'profile', title: 'Profile', text: 'Your progress week by week, what to practise next, daily, weekly and monthly summaries, goals and a points leaderboard.' }
 ];
+const MAIN_HINT = {
+  guitar: 'The guitar neck is drawn large on every page, with the piano further down.',
+  piano: 'The piano is drawn large on every page, with the guitar neck further down. The CAGED and Triads practice keep the neck large, because you answer on it.'
+};
 PAGES.home = {
   title: 'Home',
+  init() {
+    // The main instrument also sets the sound of the Play buttons, which can still be changed at the top
+    onButton($('mainInst'), b => {
+      state.mainInst = state.inst = b.dataset.v;
+      setPressed($('inst'), state.inst);
+      save(); PAGES.home.render();
+    });
+  },
   render() {
+    setPressed($('mainInst'), state.mainInst);
+    $('mainInstHint').textContent = MAIN_HINT[state.mainInst];
     $('homeCards').innerHTML = HOME_CARDS.filter(c => c.page !== 'profile' || API.ok).map(c =>
       `<a class="card" href="#/${c.page}"><h3>${c.title}<span aria-hidden="true">→</span></h3><p>${c.text}</p></a>`).join('');
   }

@@ -14,7 +14,7 @@ function load() { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } 
 const saved = load();
 const DEFAULTS = {
   page: 'home', sub: {},
-  root: 'A', labels: 'name', inst: 'guitar', notation: 'intl',
+  root: 'A', labels: 'name', inst: 'guitar', mainInst: 'guitar', notation: 'intl',
   scale: 'minpenta', scalePos: 'all', scaleKind: 'triads',
   chord: 'maj', chordShape: 'E', chordAll: true,
   cagedQ: 'maj', shape: 'all', cagedScale: '', cagedCompare: true,
@@ -28,6 +28,7 @@ const state = {};
 for (const k of Object.keys(DEFAULTS)) state[k] = saved[k] !== undefined ? saved[k] : DEFAULTS[k];
 // Values from older versions or a damaged store fall back to the defaults
 if (!ROOTS.includes(state.root)) state.root = DEFAULTS.root;
+if (!['guitar', 'piano'].includes(state.mainInst)) state.mainInst = DEFAULTS.mainInst;
 if (!CHORDS.some(c => c.id === state.chord)) state.chord = DEFAULTS.chord;
 if (!CAGED_QUALITIES.includes(state.cagedQ)) state.cagedQ = DEFAULTS.cagedQ;
 if (!SCALES.some(s => s.id === state.scale)) state.scale = DEFAULTS.scale;
@@ -421,9 +422,28 @@ function route() {
 }
 function rerender() {
   if (!current) return;
+  placeInstruments();
   renderRootPickers();
   renderLabelPickers();
   PAGES[current.page].render(current.sub);
+}
+
+/* ================= MAIN INSTRUMENT =================
+   The main instrument, chosen on the Home page, is drawn large at the top of each page and the other one
+   smaller further down. A page marks the two places with data-slot="main" and data-slot="second", and the
+   neck and the piano are moved between them, so the code that draws them is the same either way.
+   The CAGED and Triads practice keep the guitar large, because their tasks are answered on the neck. */
+const NECK_TASKS = { caged: 'practice', triads: 'practice' };
+const mainInstrument = (page, sub) => state.mainInst === 'piano' && NECK_TASKS[page] !== sub ? 'piano' : 'guitar';
+function placeInstruments() {
+  const el = $('page-' + current.page);
+  const main = el.querySelector('[data-slot="main"]'), second = el.querySelector('[data-slot="second"]');
+  if (!main || !second) return;
+  const big = mainInstrument(current.page, current.sub);
+  $$('.inst-block', el).forEach(b => {
+    const slot = b.dataset.inst === big ? main : second;
+    if (b.parentElement !== slot) slot.appendChild(b);
+  });
 }
 
 /* ================= PRACTICE DRILLS =================
