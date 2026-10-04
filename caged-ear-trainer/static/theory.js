@@ -229,6 +229,110 @@ function diatonicChords(root, scaleId, sevenths = false) {
   });
 }
 
+/* --- Chord progressions ---
+   Each chord is written as [Roman numeral, interval of its root above the key note, chord type, bars].
+   The numerals follow the key: in a minor key VII and VI are the chords on the seventh and sixth notes of
+   the natural minor scale (G and F in A minor), and V is the major V that the harmonic minor scale gives.
+   In a major key a chord from outside the key is marked with its accidental (♭VII). */
+const PROGRESSIONS = [
+  { id: 'pop', name: 'I–V–vi–IV', nick: 'The pop progression', mode: 'major',
+    chords: [['I', '1', 'maj'], ['V', '5', 'maj'], ['vi', '6', 'min'], ['IV', '4', 'maj']],
+    about: 'Probably the most used progression in pop today. Heard in "Let It Be" (The Beatles), "With or Without You" (U2) and "Someone Like You" (Adele).' },
+  { id: 'fifties', name: 'I–vi–IV–V', nick: 'The 50s progression', mode: 'major',
+    chords: [['I', '1', 'maj'], ['vi', '6', 'min'], ['IV', '4', 'maj'], ['V', '5', 'maj']],
+    about: 'The doo-wop progression behind countless love songs of the 1950s.' },
+  { id: 'sadpop', name: 'vi–IV–I–V', nick: 'Pop, starting on the minor chord', mode: 'major',
+    chords: [['vi', '6', 'min'], ['IV', '4', 'maj'], ['I', '1', 'maj'], ['V', '5', 'maj']],
+    about: 'The same four chords as I–V–vi–IV, but starting on vi, which makes it sound more wistful.' },
+  { id: 'three', name: 'I–IV–V–I', nick: 'The three-chord trick', mode: 'major',
+    chords: [['I', '1', 'maj'], ['IV', '4', 'maj'], ['V', '5', 'maj'], ['I', '1', 'maj']],
+    about: 'The three major chords of a major key. The backbone of rock, country and folk.' },
+  { id: 'canon', name: 'I–V–vi–iii–IV–I–IV–V', nick: 'Pachelbel’s Canon', mode: 'major',
+    chords: [['I', '1', 'maj'], ['V', '5', 'maj'], ['vi', '6', 'min'], ['iii', '3', 'min'], ['IV', '4', 'maj'], ['I', '1', 'maj'], ['IV', '4', 'maj'], ['V', '5', 'maj']],
+    about: 'The bass line of Pachelbel’s Canon in D steps down, and many pop songs borrow it.' },
+  { id: 'turnaround', name: 'I–vi–ii–V', nick: 'The turnaround', mode: 'major',
+    chords: [['I', '1', 'maj'], ['vi', '6', 'min'], ['ii', '2', 'min'], ['V', '5', 'maj']],
+    about: 'Each chord moves down a fifth to the next, leading back to I. Common in jazz standards and old pop.' },
+  { id: 'twofive', name: 'ii7–V7–Imaj7', nick: 'The ii–V–I', mode: 'major',
+    chords: [['ii7', '2', 'm7'], ['V7', '5', '7'], ['Imaj7', '1', 'maj7', 2]],
+    about: 'The most important progression in jazz. In C major it is Dm7, G7 and Cmaj7.' },
+  { id: 'blues', name: '12-bar blues', nick: 'Blues with dominant sevenths', mode: 'major',
+    chords: [['I7', '1', '7', 4], ['IV7', '4', '7', 2], ['I7', '1', '7', 2], ['V7', '5', '7'], ['IV7', '4', '7'], ['I7', '1', '7'], ['V7', '5', '7']],
+    about: 'Four bars of I, two of IV, two of I, then V, IV, I and V to turn around. All three chords are dominant sevenths.' },
+  { id: 'rock', name: 'I–♭VII–IV–I', nick: 'Rock with a borrowed ♭VII', mode: 'major',
+    chords: [['I', '1', 'maj'], ['♭VII', 'b7', 'maj'], ['IV', '4', 'maj'], ['I', '1', 'maj']],
+    about: 'The ♭VII chord is borrowed from the Mixolydian mode and gives a classic rock sound.' },
+  { id: 'andalusian', name: 'i–VII–VI–V', nick: 'The Andalusian cadence', mode: 'minor',
+    chords: [['i', '1', 'min'], ['VII', 'b7', 'maj'], ['VI', 'b6', 'maj'], ['V', '5', 'maj']],
+    about: 'Steps down from the minor chord to a major V, as in flamenco. In A minor: Am, G, F, E.' },
+  { id: 'minorpop', name: 'i–VI–III–VII', nick: 'Minor pop', mode: 'minor',
+    chords: [['i', '1', 'min'], ['VI', 'b6', 'maj'], ['III', 'b3', 'maj'], ['VII', 'b7', 'maj']],
+    about: 'The chords of the natural minor scale. In A minor: Am, F, C, G, the same chords as vi–IV–I–V in C major.' },
+  { id: 'minorcadence', name: 'i–iv–V–i', nick: 'Minor cadence', mode: 'minor',
+    chords: [['i', '1', 'min'], ['iv', '4', 'min'], ['V', '5', 'maj'], ['i', '1', 'min']],
+    about: 'The basic minor-key progression. The V chord is major, with the raised seventh of harmonic minor, so it pulls home to i.' }
+];
+// The name of a key: major keys with flats (Db, Eb, Ab, Bb), minor keys with sharps (C#m, F#m, G#m)
+const keyName = (pc, mode) => (mode === 'minor' ? MINOR_ROOTS : ROOTS)[((pc % 12) + 12) % 12];
+// A grip near the nut with open strings, the kind found in chord books as an open chord
+const isOpenGrip = p => p.base === 0 && p.lo <= 3;
+function openGrip(rootPc, q) { return chordShapes(rootPc, q).find(isOpenGrip) || null; }
+// The chords of a progression in a key. With a capo the shapes are those of the key `capo` semitones lower:
+// with capo 2, A major is played with the shapes of G major.
+function progressionChords(prog, keyPc, capo = 0) {
+  const key = keyName(keyPc, prog.mode), shapeKey = keyName(keyPc - capo, prog.mode);
+  let bar = 0;
+  return prog.chords.map(([roman, iv, q, bars = 1]) => {
+    const root = spellRaw(key, iv), shapeRoot = spellRaw(shapeKey, iv);
+    const c = { roman, iv, q, bars, bar, root, shapeRoot, symbol: chordSymbol(root, q), shapeSymbol: chordSymbol(shapeRoot, q) };
+    bar += bars;
+    return c;
+  });
+}
+const progressionBars = prog => prog.chords.reduce((n, c) => n + (c[3] || 1), 0);
+// Capo positions (up to maxCapo) where every chord of the progression has an open grip
+function capoSuggestions(prog, keyPc, maxCapo = 9) {
+  const out = [];
+  for (let capo = 0; capo <= maxCapo; capo++) {
+    const chords = progressionChords(prog, keyPc, capo);
+    if (chords.every(c => openGrip(parseNote(c.shapeRoot).pc, c.q))) out.push({ capo, shapeKey: keyName(keyPc - capo, prog.mode) });
+  }
+  return out;
+}
+
+/* ================= RHYTHM (metronome, pure functions) ================= */
+// The clicks inside one beat, as fractions of the beat: 'accent' (beat 1), 'beat' or 'sub' (a subdivision).
+// subdiv is the number of notes per beat, or a list with one number per beat.
+// only: click only on these beats (1-based), offbeat: click only halfway between the beats, silent: no click.
+function beatClicks({ subdiv = 1, accent = true, only = null, offbeat = false, silent = false } = {}, beat) {
+  if (silent) return [];
+  if (offbeat) return [{ at: 0.5, kind: 'beat' }];
+  const n = Array.isArray(subdiv) ? subdiv[beat] || 1 : subdiv, out = [];
+  if (!only || only.includes(beat + 1)) out.push({ at: 0, kind: accent && beat === 0 ? 'accent' : 'beat' });
+  for (let k = 1; k < n; k++) out.push({ at: k / n, kind: 'sub' });
+  return out;
+}
+// Speed trainer: start at `start` BPM and go up `step` BPM every `every` bars until `target`
+const trainerBpm = (start, step, every, target, bar) =>
+  step > 0 && target > start ? Math.min(target, start + step * Math.floor(bar / Math.max(1, every))) : start;
+// Gap click: `on` bars with the click, then `off` bars without it, over and over
+const isSilentBar = (on, off, bar) => off > 0 && bar % (on + off) >= on;
+// Subdivision ladder: 1, 2, 3 and 4 notes per click, `each` bars of each, then from the start again
+const LADDER = [1, 2, 3, 4];
+const ladderStep = (each, bar) => LADDER[Math.floor(bar / Math.max(1, each)) % LADDER.length];
+// Tap tempo: the tempo from the times of the last taps in seconds, or null with fewer than two taps
+function tapTempo(times) {
+  if (times.length < 2) return null;
+  return Math.round(60 * (times.length - 1) / (times[times.length - 1] - times[0]));
+}
+// Spider exercise: fingers 1-2-3-4 on one fret each from `fret`, low E string to high e and back down
+function spiderNotes(fret) {
+  const up = [], down = [];
+  for (let st = 0; st < 6; st++) for (let k = 0; k < 4; k++) up.push({ st, f: fret + k, finger: k + 1 });
+  for (let st = 5; st >= 0; st--) for (let k = 3; k >= 0; k--) down.push({ st, f: fret + k, finger: k + 1 });
+  return up.concat(down);
+}
+
 /* ================= SYNTHESIS (pure functions, no Web Audio, so they can be tested) ================= */
 // Karplus-Strong plucked string: a short noise burst circulates in a delay line and is low-pass filtered on every pass.
 // In this implementation each output sample is the average of the samples N and N-1 steps back,
@@ -269,6 +373,13 @@ function synthPiano(f, sr, seconds = 3) {
   for (let i = 0; i < atk; i++) d[i] *= i / atk;
   const fade = Math.floor(sr * 0.2);
   for (let i = 0; i < fade; i++) d[len - 1 - i] *= i / fade;
+  return { samples: d, rate: 1 };
+}
+
+// Metronome click: a short sine burst that dies away within a few hundredths of a second
+function synthClick(f, sr, seconds = 0.05) {
+  const len = Math.floor(sr * seconds), d = new Float32Array(len), atk = Math.max(1, Math.floor(sr * 0.001));
+  for (let i = 0; i < len; i++) d[i] = 0.8 * Math.sin(2 * Math.PI * f * i / sr) * Math.exp(-i / sr * 110) * Math.min(1, i / atk);
   return { samples: d, rate: 1 };
 }
 

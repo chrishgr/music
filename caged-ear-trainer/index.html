@@ -43,6 +43,8 @@
     <a href="#/chords" data-page="chords">Chords</a>
     <a href="#/caged" data-page="caged">CAGED</a>
     <a href="#/triads" data-page="triads">Triads</a>
+    <a href="#/progressions" data-page="progressions">Progressions</a>
+    <a href="#/metronome" data-page="metronome">Metronome</a>
     <a href="#/ear" data-page="ear">Ear training</a>
     <a href="#/tuner" data-page="tuner">Tuner</a>
     <a href="#/profile" data-page="profile" id="nav-profile" hidden>Profile</a>
@@ -339,6 +341,148 @@
     <div class="scroll"><svg class="keys" id="trKeys" role="img" aria-label="Piano with the notes of the triad"></svg></div>
   </section>
 
+  <!-- ============ PROGRESSIONS ============ -->
+  <section class="page" id="page-progressions" hidden>
+    <div class="page-head">
+      <h2>Chord progressions</h2>
+      <p class="lede">Well-known progressions in any key. With a capo the page shows which shapes to play, and Play along strums the chords in time so you can practise the changes.</p>
+    </div>
+    <div class="field">
+      <span class="lbl" id="lbl-pg">Progression</span>
+      <div class="chips" id="pgList" role="group" aria-labelledby="lbl-pg"></div>
+    </div>
+    <div class="controls">
+      <div class="field">
+        <span class="lbl" id="lbl-pgkey">Key</span>
+        <div class="seg roots" id="pgKey" role="group" aria-labelledby="lbl-pgkey"></div>
+      </div>
+      <div class="field">
+        <label class="lbl" for="pgCapo">Capo</label>
+        <select id="pgCapo" style="min-width:120px"></select>
+      </div>
+    </div>
+
+    <div class="readout">
+      <div>
+        <h2 id="pgTitle"></h2>
+        <p class="formula" id="pgInfo"></p>
+      </div>
+      <div class="btns">
+        <button class="primary" id="pgPlay">Play along</button>
+        <button class="ghost" data-stop>Stop</button>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="field">
+        <span class="lbl" id="lbl-pgbpm">Tempo</span>
+        <div class="tempo-row" role="group" aria-labelledby="lbl-pgbpm">
+          <button class="ghost" data-pgbpm="-5">−5</button>
+          <input type="range" id="pgBpm" min="40" max="200" aria-label="Tempo in beats per minute">
+          <button class="ghost" data-pgbpm="5">+5</button>
+          <span class="score" id="pgBpmVal"></span>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lbl" id="lbl-pgstrum">Strumming</span>
+        <div class="seg" id="pgStrum" role="group" aria-labelledby="lbl-pgstrum">
+          <button data-v="bar">Once per bar</button><button data-v="beats">Every beat</button><button data-v="eighths">Down and up</button>
+        </div>
+      </div>
+      <label class="check"><input type="checkbox" id="pgClick"> Metronome click</label>
+      <label class="check"><input type="checkbox" id="pgLoop"> Repeat</label>
+    </div>
+    <div class="bars" id="pgBars"></div>
+    <p class="phase" id="pgPhase" aria-live="polite"></p>
+    <div class="note-box" id="pgCapoHelp"></div>
+    <div class="boxes" id="pgBoxes"></div>
+    <div class="controls">
+      <div class="field">
+        <span class="lbl">Labels</span>
+        <div class="seg" data-labels="shape" role="group" aria-label="Labels"></div>
+      </div>
+    </div>
+    <div class="legend" id="pgLegend" aria-hidden="true"></div>
+    <div class="scroll"><svg class="neck" id="pgNeck" role="img" aria-label="Fretboard with the chord"></svg></div>
+    <p class="hint" id="pgHint"></p>
+    <h3>The chord on the piano</h3>
+    <div class="scroll"><svg class="keys" id="pgPiano" role="img" aria-label="Piano with the notes of the chord"></svg></div>
+  </section>
+
+  <!-- ============ METRONOME ============ -->
+  <section class="page" id="page-metronome" hidden>
+    <div class="page-head">
+      <h2>Metronome</h2>
+      <p class="lede">A plain metronome, and well-known exercises for timing, speed and chord changes that set up the metronome for you.</p>
+    </div>
+    <nav class="subtabs" aria-label="Metronome">
+      <a href="#/metronome/click" data-sub="click">Metronome</a><a href="#/metronome/exercises" data-sub="exercises">Exercises</a>
+    </nav>
+
+    <div class="sub" data-sub="click">
+      <div class="controls">
+        <div class="field">
+          <span class="lbl" id="lbl-beats">Beats per bar</span>
+          <div class="seg" id="mBeats" role="group" aria-labelledby="lbl-beats"></div>
+        </div>
+        <div class="field">
+          <span class="lbl" id="lbl-subdiv">Notes per click</span>
+          <div class="seg" id="mSubdiv" role="group" aria-labelledby="lbl-subdiv">
+            <button data-v="1">1</button><button data-v="2">2 (eighths)</button><button data-v="3">3 (triplets)</button><button data-v="4">4 (sixteenths)</button>
+          </div>
+        </div>
+        <label class="check"><input type="checkbox" id="mAccent"> Accent on beat 1</label>
+      </div>
+    </div>
+
+    <div class="sub" data-sub="exercises">
+      <div class="field">
+        <span class="lbl" id="lbl-drill">Exercise</span>
+        <div class="chips" id="drills" role="group" aria-labelledby="lbl-drill"></div>
+      </div>
+      <div class="drill-info" id="drillInfo"></div>
+      <div class="controls" id="drillSet"></div>
+    </div>
+
+    <div class="metro" id="metro">
+      <div class="metro-top">
+        <div class="tempo" role="group" aria-label="Tempo">
+          <button class="ghost" data-bpm="-5">−5</button><button class="ghost" data-bpm="-1">−1</button>
+          <div class="bpm"><b id="bpmVal"></b><span>BPM</span></div>
+          <button class="ghost" data-bpm="1">+1</button><button class="ghost" data-bpm="5">+5</button>
+        </div>
+        <div class="btns">
+          <button class="primary" id="metroStart">Start</button>
+          <button class="ghost" id="tapBtn">Tap tempo</button>
+        </div>
+      </div>
+      <input type="range" id="bpmRange" min="30" max="260" aria-label="Tempo in beats per minute">
+      <div class="beats" id="beatLights" aria-hidden="true"></div>
+      <p class="phase" id="metroPhase" aria-live="polite"></p>
+      <label class="check vol">Click volume <input type="range" id="clickVol" min="0" max="1" step="0.05"></label>
+      <p class="kbd"><kbd>Space</kbd> start and stop &nbsp; <kbd>↑</kbd> <kbd>↓</kbd> tempo &nbsp; <kbd>T</kbd> tap tempo</p>
+    </div>
+
+    <div class="stage" id="omcBox" hidden>
+      <div class="controls">
+        <div class="field"><label class="lbl" for="omcA">First chord</label><select id="omcA" style="min-width:110px"></select></div>
+        <div class="field"><label class="lbl" for="omcB">Second chord</label><select id="omcB" style="min-width:110px"></select></div>
+        <label class="check"><input type="checkbox" id="omcClick"> Click along at the tempo above</label>
+      </div>
+      <div class="boxes" id="omcBoxes"></div>
+      <div class="countdown"><b id="omcTime">60</b><span id="omcState">seconds</span></div>
+      <div class="btns"><button class="primary" id="omcStart">Start one minute</button></div>
+      <form class="new-profile" id="omcForm" autocomplete="off" hidden>
+        <div class="field"><label class="lbl" for="omcCount">How many changes did you make?</label><input id="omcCount" type="number" min="0" max="300" placeholder="Count"></div>
+        <button class="primary" type="submit">Save</button>
+      </form>
+      <div id="omcLog"></div>
+    </div>
+    <div id="spiderBox" hidden>
+      <div class="legend" aria-hidden="true"><span>The numbers are fingers: 1 index, 2 middle, 3 ring, 4 little finger. The note to play lights up in time.</span></div>
+      <div class="scroll"><svg class="neck" id="mxNeck" role="img" aria-label="Fretboard with the spider exercise"></svg></div>
+    </div>
+  </section>
+
   <!-- ============ EAR TRAINING ============ -->
   <section class="page" id="page-ear" hidden>
     <div class="page-head">
@@ -493,6 +637,8 @@
 <script src="static/pages/chords.js"></script>
 <script src="static/pages/caged.js"></script>
 <script src="static/pages/triads.js"></script>
+<script src="static/pages/progressions.js"></script>
+<script src="static/pages/metronome.js"></script>
 <script src="static/pages/ear.js"></script>
 <script src="static/pages/tuner.js"></script>
 <script src="static/pages/profile.js"></script>

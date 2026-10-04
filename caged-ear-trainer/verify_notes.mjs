@@ -18,7 +18,9 @@ const T = new Function(`
   return { TUNING, IV, ROOTS, SCALES, CHORDS, parseNote, spell, spellRaw, mtof, synthPluck, synthPiano,
            detectPitch, freqToMidi, foldCents, PITCH_WINDOW, intervalName, OPEN_CHORDS, TRIAD_IVS,
            capoChord, triadVoicings, naming, SHAPES, SHAPE_ORDER, CAGED_QUALITIES, CAGED_SCALE, gripOf,
-           shapeInstances, chordShapes, positionMidis, scalesContaining, diatonicChords, MINOR_ROOTS };
+           shapeInstances, chordShapes, positionMidis, scalesContaining, diatonicChords, MINOR_ROOTS,
+           PROGRESSIONS, progressionChords, progressionBars, capoSuggestions, openGrip, keyName,
+           beatClicks, trainerBpm, isSilentBar, ladderStep, tapTempo, spiderNotes, synthClick };
 `)();
 
 let passed = 0, failed = 0;
@@ -374,6 +376,89 @@ check('scales for 7', fitIds('7'), ['mixolydian']);
 check('scales for m7', fitIds('m7'), ['minor', 'minpenta', 'blues', 'dorian', 'phrygian']);
 check('scales for m7b5 (only the blues scale has the b5 and the b7)', fitIds('m7b5'), ['blues']);
 for (const q of T.CAGED_QUALITIES) check(`usual scale for ${q} contains the chord`, fitIds(q).includes(T.CAGED_SCALE[q]), true);
+
+// 19. Chord progressions. Expected chords written out by hand from the Roman numerals in each key.
+//     Minor keys are written with sharps (C#m), major keys with flats (Db), as in key signatures.
+console.log('19. Chord progressions');
+const prog = id => T.PROGRESSIONS.find(p => p.id === id);
+const plainSyms = (id, key, capo = 0, field = 'symbol') => T.progressionChords(prog(id), pcOf(key), capo).map(c => plain(c[field]));
+const byBar = (id, key) => T.progressionChords(prog(id), pcOf(key)).flatMap(c => Array(c.bars).fill(plain(c.symbol)));
+check('pop in C', plainSyms('pop', 'C'), ['C', 'G', 'Am', 'F']);
+check('pop in G', plainSyms('pop', 'G'), ['G', 'D', 'Em', 'C']);
+check('pop in A with capo 2 sounds', plainSyms('pop', 'A', 2), ['A', 'E', 'F#m', 'D']);
+check('pop in A with capo 2 is played with G shapes', plainSyms('pop', 'A', 2, 'shapeSymbol'), ['G', 'D', 'Em', 'C']);
+check('pop in Db (flats)', plainSyms('pop', 'Db'), ['Db', 'Ab', 'Bbm', 'Gb']);
+check('50s progression in C', plainSyms('fifties', 'C'), ['C', 'Am', 'F', 'G']);
+check('turnaround in C', plainSyms('turnaround', 'C'), ['C', 'Am', 'Dm', 'G']);
+check('Pachelbel in D', plainSyms('canon', 'D'), ['D', 'A', 'Bm', 'F#m', 'G', 'D', 'G', 'A']);
+check('ii-V-I in Bb', plainSyms('twofive', 'Bb'), ['Cm7', 'F7', 'Bbmaj7']);
+check('ii-V-I lasts four bars', T.progressionBars(prog('twofive')), 4);
+check('12-bar blues in A, bar by bar', byBar('blues', 'A'), ['A7', 'A7', 'A7', 'A7', 'D7', 'D7', 'A7', 'A7', 'E7', 'D7', 'A7', 'E7']);
+check('rock I-bVII-IV-I in D', plainSyms('rock', 'D'), ['D', 'C', 'G', 'D']);
+check('Andalusian cadence in A minor', plainSyms('andalusian', 'A'), ['Am', 'G', 'F', 'E']);
+check('Andalusian cadence in E minor', plainSyms('andalusian', 'E'), ['Em', 'D', 'C', 'B']);
+check('Andalusian cadence in C# minor (sharps)', plainSyms('andalusian', 'C#'), ['C#m', 'B', 'A', 'G#']);
+check('minor pop in A minor', plainSyms('minorpop', 'A'), ['Am', 'F', 'C', 'G']);
+check('minor cadence in A minor', plainSyms('minorcadence', 'A'), ['Am', 'Dm', 'E', 'Am']);
+check('key names', [T.keyName(1, 'major'), T.keyName(1, 'minor'), T.keyName(8, 'major'), T.keyName(8, 'minor'), T.keyName(-2, 'major')], ['Db', 'C#', 'Ab', 'G#', 'Bb']);
+// Capo positions where every chord is an open chord (open C, A, G, E, D shapes and their minor and 7 forms)
+const capos = (id, key) => T.capoSuggestions(prog(id), pcOf(key)).map(x => x.capo);
+check('pop in A: capo 2 (G shapes)', capos('pop', 'A'), [2]);
+check('pop in Bb: capo 3 (G shapes)', capos('pop', 'Bb'), [3]);
+check('I-IV-V-I in A: no capo (A), capo 2 (G), capo 7 (D)', capos('three', 'A'), [0, 2, 7]);
+check('minor pop in A minor: capo 5 (Em shapes)', capos('minorpop', 'A'), [5]);
+check('open grips exist for C A G E D, Am Em Dm, A7 E7', [['C', 'maj'], ['A', 'maj'], ['G', 'maj'], ['E', 'maj'], ['D', 'maj'], ['A', 'min'], ['E', 'min'], ['D', 'min'], ['A', '7'], ['E', '7']]
+  .every(([r, q]) => T.openGrip(pcOf(r), q)), true);
+check('no open grip for F, Bm, F#m, Bb', [['F', 'maj'], ['B', 'min'], ['F#', 'min'], ['Bb', 'maj']].some(([r, q]) => T.openGrip(pcOf(r), q)), false);
+// Every progression in every key and with every capo: the shapes are the chords moved down by the capo,
+// and the numerals agree with the chords the scale gives (natural minor, with harmonic minor for V in minor keys).
+// The blues (dominant sevenths on I and IV) and the borrowed bVII are outside the key on purpose.
+for (const p of T.PROGRESSIONS) for (let k = 0; k < 12; k++) {
+  const key = T.keyName(k, p.mode);
+  for (let capo = 0; capo <= 9; capo++) {
+    const ok = T.progressionChords(p, k, capo).every(c => ((pcOf(c.root) - pcOf(c.shapeRoot)) % 12 + 12) % 12 === capo);
+    check(`${p.id} in ${key} with capo ${capo}: shapes are ${capo} semitones lower`, ok, true);
+  }
+  if (p.id === 'blues' || p.id === 'rock') continue;
+  for (const c of T.progressionChords(p, k)) {
+    const deg = T.IV[c.iv][1] - 1, seventh = T.CHORDS.find(x => x.id === c.q).iv.length === 4;
+    const scale = p.mode === 'major' ? 'major' : c.iv === '5' ? 'harmminor' : 'minor';
+    const d = T.diatonicChords(key, scale, seventh)[deg];
+    check(`${p.id} in ${key}: ${c.roman} is ${plain(d.root)}${d.chord.id}`, [c.root, c.q], [d.root, d.chord.id]);
+  }
+}
+
+// 20. Metronome patterns. Fractions of a beat; beat 1 is accented.
+console.log('20. Metronome patterns');
+const clicks = (cfg, beat) => T.beatClicks(cfg, beat).map(k => `${+k.at.toFixed(3)} ${k.kind}`);
+check('plain beat 1', clicks({}, 0), ['0 accent']);
+check('plain beat 2', clicks({}, 1), ['0 beat']);
+check('eighths', clicks({ subdiv: 2 }, 0), ['0 accent', '0.5 sub']);
+check('triplets on beat 3', clicks({ subdiv: 3 }, 2), ['0 beat', '0.333 sub', '0.667 sub']);
+check('no accent', clicks({ accent: false }, 0), ['0 beat']);
+check('2 and 4: beat 1 silent', clicks({ only: [2, 4], accent: false }, 0), []);
+check('2 and 4: beat 2 clicks', clicks({ only: [2, 4], accent: false }, 1), ['0 beat']);
+check('offbeat', clicks({ offbeat: true }, 0), ['0.5 beat']);
+check('silent bar', clicks({ silent: true, subdiv: 4 }, 0), []);
+check('burst: six on beat 4', clicks({ subdiv: [3, 3, 3, 6] }, 3).length, 6);
+check('speed trainer 80 +5 every 4 bars to 140', [0, 3, 4, 47, 48, 100].map(b => T.trainerBpm(80, 5, 4, 140, b)), [80, 80, 85, 135, 140, 140]);
+check('speed trainer with no step stays', T.trainerBpm(90, 0, 4, 140, 20), 90);
+check('gap 3+1', [0, 1, 2, 3, 4, 7].map(b => T.isSilentBar(3, 1, b)), [false, false, false, true, false, true]);
+check('gap 1+3', [0, 1, 2, 3, 4].map(b => T.isSilentBar(1, 3, b)), [false, true, true, true, false]);
+check('gap 4+0 never silent', [0, 3, 4, 9].some(b => T.isSilentBar(4, 0, b)), false);
+check('ladder, 4 bars each', [0, 3, 4, 8, 12, 16].map(b => T.ladderStep(4, b)), [1, 1, 2, 3, 4, 1]);
+check('tap tempo, taps 0.5 s apart', T.tapTempo([0, 0.5, 1, 1.5]), 120);
+check('tap tempo, two taps 0.4 s apart', T.tapTempo([3, 3.4]), 150);
+check('tap tempo needs two taps', T.tapTempo([1]), null);
+const spider = T.spiderNotes(5);
+check('spider has 48 notes', spider.length, 48);
+check('spider starts low E fret 5 finger 1', spider[0], { st: 0, f: 5, finger: 1 });
+check('spider turns on high e with finger 4', [spider[23], spider[24]], [{ st: 5, f: 8, finger: 4 }, { st: 5, f: 8, finger: 4 }]);
+check('spider ends on low E fret 5', spider[47], { st: 0, f: 5, finger: 1 });
+check('spider stays on frets 5 to 8, finger = fret - 4', spider.every(n => n.f >= 5 && n.f <= 8 && n.finger === n.f - 4), true);
+const click = T.synthClick(1100, 48000).samples;
+check('click starts loud', Math.max(...click.slice(0, 240).map(Math.abs)) > 0.5, true);
+check('click has died away at the end', Math.max(...click.slice(-240).map(Math.abs)) < 0.01, true);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
