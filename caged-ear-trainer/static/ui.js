@@ -21,7 +21,7 @@ const DEFAULTS = {
   cpType: 'play', cpQ: ['maj', 'min', '7'], cpShapes: [...SHAPE_ORDER],
   triShape: 'G', capo: 0, triSet: '3', triPos: 0, triAuto: true, pType: 'play', pRandCapo: true,
   bpm: 80, beats: 4, subdiv: 1, accent: true, clickVol: 0.8, drill: 'ladder', drillSet: {}, omcLog: {},
-  prog: 'pop', progCapo: 0, progBpm: 90, progStrum: 'beats', progClick: true, progLoop: true
+  prog: 'pop', progCapo: 0, progBpm: 90, progStrum: 'beats', progClick: true, progLoop: true, progGenre: 'classic', progStart: 0
 };
 const state = {};
 for (const k of Object.keys(DEFAULTS)) state[k] = saved[k] !== undefined ? saved[k] : DEFAULTS[k];
@@ -316,7 +316,8 @@ function midiMarks(p, tones) {
 /* ================= DRAWING: CHORD DIAGRAMS ================= */
 // A chord box as in chord books: strings from low E (left) to high e (right), frets from the nut down.
 // When the grip sits higher than fret 5, the number of its first fret is written on the left.
-function chordBoxSvg(p, tones) {
+// anchors: notes ('string:fret') that stay in place across a progression, drawn with a dashed ring
+function chordBoxSvg(p, tones, anchors = new Set()) {
   const SW = 16, FH = 20, LEFT = 18, TOPY = 24;
   const played = p.frets.filter(f => f >= 0), hi = Math.max(...played);
   const fretted = played.filter(f => f > 0);
@@ -333,17 +334,17 @@ function chordBoxSvg(p, tones) {
     if (f < 0) { s += `<text class="cb-mark" x="${x}" y="${TOPY - 11}">×</text>`; return; }
     const t = tones.find(x => x.pc === (TUNING[st] + f) % 12);
     if (f === 0) s += `<circle class="cb-open ${t ? t.role : ''}" cx="${x}" cy="${TOPY - 11}" r="4.5"/>`;
-    else s += dotSvg(x, TOPY + (f - start + 0.5) * FH, t, t ? t.role : 'other', 7.5);
+    else s += dotSvg(x, TOPY + (f - start + 0.5) * FH, t, (t ? t.role : 'other') + (anchors.has(noteKey(st, f)) ? ' anchor' : ''), 7.5);
   });
   return `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true">${s}</svg>`;
 }
-function chordBoxButton(p, tones, { i, title, sub, pressed = false, playing = false }) {
-  return `<button class="box${playing ? ' playing' : ''}" data-i="${i}" aria-pressed="${pressed}">${chordBoxSvg(p, tones)}<b>${title}</b><small>${sub}</small></button>`;
+function chordBoxButton(p, tones, { i, title, sub, pressed = false, playing = false, anchors }) {
+  return `<button class="box${playing ? ' playing' : ''}" data-i="${i}" aria-pressed="${pressed}">${chordBoxSvg(p, tones, anchors)}<b>${title}</b><small>${sub}</small></button>`;
 }
 const fretRange = p => p.lo === p.hi ? `fret ${p.lo}` : `frets ${p.lo}–${p.hi}`;
 
 /* ================= SHARED CONTROLS ================= */
-const LEGEND_TXT = { root: 'Root', third: 'Third', fifth: 'Fifth', seventh: 'Seventh', other: 'Other notes', ghost: 'Note in the major shape' };
+const LEGEND_TXT = { root: 'Root', third: 'Third', fifth: 'Fifth', seventh: 'Seventh', other: 'Other notes', ghost: 'Note in the major shape', anchor: 'Anchor finger, stays put' };
 function legendHtml(keys) {
   return keys.map(k => `<span><i class="sw ${k}"></i>${LEGEND_TXT[k]}</span>`).join('');
 }

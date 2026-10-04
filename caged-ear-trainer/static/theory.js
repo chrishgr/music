@@ -10,7 +10,7 @@ const NATURAL = [0, 2, 4, 5, 7, 9, 11];
 // interval -> [semitones, scale degree]
 const IV = {
   '1': [0, 1], 'b2': [1, 2], '2': [2, 2], 'b3': [3, 3], '3': [4, 3], '4': [5, 4], '#4': [6, 4],
-  'b5': [6, 5], '5': [7, 5], '#5': [8, 5], 'b6': [8, 6], '6': [9, 6], 'bb7': [9, 7], 'b7': [10, 7], '7': [11, 7], '8': [12, 8]
+  'b5': [6, 5], '5': [7, 5], '#5': [8, 5], 'b6': [8, 6], '6': [9, 6], 'bb7': [9, 7], 'b7': [10, 7], '7': [11, 7], '8': [12, 8], '9': [14, 9]
 };
 const ROOTS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 const SCALES = [
@@ -38,7 +38,8 @@ const CHORDS = [
   { id: 'm7b5', sym: 'm7♭5', name: 'Half-diminished', iv: ['1', 'b3', 'b5', 'b7'] },
   { id: 'dim7', sym: 'dim7', name: 'Diminished seventh', iv: ['1', 'b3', 'b5', 'bb7'] },
   { id: 'mmaj7', sym: 'm(maj7)', name: 'Minor-major seventh', iv: ['1', 'b3', '5', '7'] },
-  { id: 'maj7s5', sym: 'maj7♯5', name: 'Augmented major seventh', iv: ['1', '3', '#5', '7'] }
+  { id: 'maj7s5', sym: 'maj7♯5', name: 'Augmented major seventh', iv: ['1', '3', '#5', '7'] },
+  { id: 'add9', sym: 'add9', name: 'Added ninth', iv: ['1', '3', '5', '9'] }
 ];
 const chordById = id => CHORDS.find(c => c.id === id) || CHORDS[0];
 
@@ -68,7 +69,8 @@ const SHAPES = {
   m7b5:   { A: 'x 0 1 0 1 x', E: '12 x 12 12 11 x', D: 'x x 0 1 1 1' },
   dim7:   { A: 'x 12 13 11 13 x', E: '12 x 11 12 11 12', D: 'x x 0 1 0 1' },
   mmaj7:  { A: 'x 0 2 1 1 0', E: '0 2 1 0 0 0', D: 'x x 0 2 2 1' },
-  maj7s5: { A: 'x 0 3 1 2 x', E: '0 x 1 1 1 x', D: 'x x 0 3 2 2' }
+  maj7s5: { A: 'x 0 3 1 2 x', E: '0 x 1 1 1 x', D: 'x x 0 3 2 2' },
+  add9:   { C: 'x 3 2 0 3 3', A: 'x 0 2 4 2 0', G: '3 2 0 2 0 3', E: '0 2 4 1 0 0' }
 };
 // Chord qualities with all five CAGED shapes, as offered on the CAGED page
 const CAGED_QUALITIES = ['maj', 'min', '7', 'm7', 'maj7'];
@@ -156,7 +158,7 @@ function triadVoicings(rootPc, quality, lowString, capo = 0, maxFret = 15, maxSp
 // Unisons, fourths, fifths and octaves are perfect; seconds, thirds, sixths and sevenths are major or minor.
 // The quality is the distance in semitones from the major-scale interval with the same number.
 const PERFECT_DEGREES = [1, 4, 5, 8];
-const MAJOR_SCALE_SEMIS = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11, 8: 12 };
+const MAJOR_SCALE_SEMIS = { 1: 0, 2: 2, 3: 4, 4: 5, 5: 7, 6: 9, 7: 11, 8: 12, 9: 14 };
 function intervalName(iv) {
   const [semi, deg] = IV[iv];
   const off = semi - MAJOR_SCALE_SEMIS[deg];
@@ -230,15 +232,22 @@ function diatonicChords(root, scaleId, sevenths = false) {
 }
 
 /* --- Chord progressions ---
-   Each chord is written as [Roman numeral, interval of its root above the key note, chord type, bars].
+   Each chord is written as [Roman numeral, interval of its root above the key note, chord type, bars, options].
+   Bars can be a fraction: 0.25 is one beat of a 4/4 bar. Options: bass (a slash chord, the interval of the
+   bass note above the key note), borrowed (the chord comes from the parallel minor key) and hammer (in Play
+   along the chord is made by a hammer-on or pull-off from the one before, without a new strum).
    The numerals follow the key: in a minor key VII and VI are the chords on the seventh and sixth notes of
    the natural minor scale (G and F in A minor), and V is the major V that the harmonic minor scale gives.
-   In a major key a chord from outside the key is marked with its accidental (♭VII). */
+   In a major key a chord from outside the key is marked with its accidental (♭VII). V⁶ and I⁶ are chords
+   with their third in the bass (G/B and C/E in C major).
+   loop: the chords repeat as a loop, so the page offers to start on any of them.
+   family, capo, grips: the progression is played with the open shapes of one key (the family) and a capo
+   chooses the key it sounds in. grips holds the voicing of each chord in that family, as tab. */
 const PROGRESSIONS = [
-  { id: 'pop', name: 'I–V–vi–IV', nick: 'The pop progression', mode: 'major',
+  { id: 'pop', loop: true, name: 'I–V–vi–IV', nick: 'The pop progression', mode: 'major',
     chords: [['I', '1', 'maj'], ['V', '5', 'maj'], ['vi', '6', 'min'], ['IV', '4', 'maj']],
     about: 'Probably the most used progression in pop today. Heard in "Let It Be" (The Beatles), "With or Without You" (U2) and "Someone Like You" (Adele).' },
-  { id: 'fifties', name: 'I–vi–IV–V', nick: 'The 50s progression', mode: 'major',
+  { id: 'fifties', loop: true, name: 'I–vi–IV–V', nick: 'The 50s progression', mode: 'major',
     chords: [['I', '1', 'maj'], ['vi', '6', 'min'], ['IV', '4', 'maj'], ['V', '5', 'maj']],
     about: 'The doo-wop progression behind countless love songs of the 1950s.' },
   { id: 'sadpop', name: 'vi–IV–I–V', nick: 'Pop, starting on the minor chord', mode: 'major',
@@ -250,7 +259,7 @@ const PROGRESSIONS = [
   { id: 'canon', name: 'I–V–vi–iii–IV–I–IV–V', nick: 'Pachelbel’s Canon', mode: 'major',
     chords: [['I', '1', 'maj'], ['V', '5', 'maj'], ['vi', '6', 'min'], ['iii', '3', 'min'], ['IV', '4', 'maj'], ['I', '1', 'maj'], ['IV', '4', 'maj'], ['V', '5', 'maj']],
     about: 'The bass line of Pachelbel’s Canon in D steps down, and many pop songs borrow it.' },
-  { id: 'turnaround', name: 'I–vi–ii–V', nick: 'The turnaround', mode: 'major',
+  { id: 'turnaround', loop: true, name: 'I–vi–ii–V', nick: 'The turnaround', mode: 'major',
     chords: [['I', '1', 'maj'], ['vi', '6', 'min'], ['ii', '2', 'min'], ['V', '5', 'maj']],
     about: 'Each chord moves down a fifth to the next, leading back to I. Common in jazz standards and old pop.' },
   { id: 'twofive', name: 'ii7–V7–Imaj7', nick: 'The ii–V–I', mode: 'major',
@@ -265,13 +274,65 @@ const PROGRESSIONS = [
   { id: 'andalusian', name: 'i–VII–VI–V', nick: 'The Andalusian cadence', mode: 'minor',
     chords: [['i', '1', 'min'], ['VII', 'b7', 'maj'], ['VI', 'b6', 'maj'], ['V', '5', 'maj']],
     about: 'Steps down from the minor chord to a major V, as in flamenco. In A minor: Am, G, F, E.' },
-  { id: 'minorpop', name: 'i–VI–III–VII', nick: 'Minor pop', mode: 'minor',
+  { id: 'minorpop', loop: true, name: 'i–VI–III–VII', nick: 'Minor pop', mode: 'minor',
     chords: [['i', '1', 'min'], ['VI', 'b6', 'maj'], ['III', 'b3', 'maj'], ['VII', 'b7', 'maj']],
     about: 'The chords of the natural minor scale. In A minor: Am, F, C, G, the same chords as vi–IV–I–V in C major.' },
   { id: 'minorcadence', name: 'i–iv–V–i', nick: 'Minor cadence', mode: 'minor',
     chords: [['i', '1', 'min'], ['iv', '4', 'min'], ['V', '5', 'maj'], ['i', '1', 'min']],
-    about: 'The basic minor-key progression. The V chord is major, with the raised seventh of harmonic minor, so it pulls home to i.' }
+    about: 'The basic minor-key progression. The V chord is major, with the raised seventh of harmonic minor, so it pulls home to i.' },
+
+  /* Acoustic Indie Folk-Pop: open shapes that ring, a capo for the key, and small decorations */
+  { id: 'fp-anchor', genre: 'folkpop', loop: true, name: 'I–Vsus4–vi7–IVadd9', nick: 'Anchor-finger loop', mode: 'major', family: 'G', capo: 2,
+    chords: [['I', '1', 'maj'], ['Vsus4', '5', 'sus4'], ['vi7', '6', 'm7'], ['IVadd9', '4', 'add9']],
+    grips: ['3 2 0 0 3 3', 'x x 0 2 3 3', '0 2 2 0 3 3', 'x 3 2 0 3 3'],
+    about: 'Fingers 3 and 4 stay on the 3rd fret of the B and high e strings in all four chords, so the same two notes ring through every change and only the lower fingers move. This is the I–V–vi–IV loop with sus4, m7 and add9 colours. Start it on vi for a more melancholic feel.' },
+  { id: 'fp-walkdown-g', genre: 'folkpop', name: 'I–V⁶–vi7–IVadd9', nick: 'Walk-down with D/F♯', mode: 'major', family: 'G', capo: 3,
+    chords: [['I', '1', 'maj'], ['V⁶', '5', 'maj', 1, { bass: '7' }], ['vi7', '6', 'm7'], ['IVadd9', '4', 'add9']],
+    grips: ['3 2 0 0 3 3', '2 x 0 2 3 2', '0 2 2 0 3 3', 'x 3 2 0 3 3'],
+    about: 'The bass steps down G, F♯, E and lands on C, while the top strings keep ringing. D/F♯ is a D chord with F♯ in the bass: the thumb or the middle finger takes F♯ on the low E string.' },
+  { id: 'fp-borrowed', genre: 'folkpop', name: 'I–Vsus4–vi7–IV–iv', nick: 'Borrowed iv before the chorus', mode: 'major', family: 'G', capo: 2,
+    chords: [['I', '1', 'maj'], ['Vsus4', '5', 'sus4'], ['vi7', '6', 'm7'], ['IV', '4', 'maj', 0.5], ['iv', '4', 'min', 0.5, { borrowed: true }]],
+    grips: ['3 2 0 0 3 3', 'x x 0 2 3 3', '0 2 2 0 3 3', 'x 3 2 0 1 0', 'x 3 5 5 4 3'],
+    about: 'In the last bar the IV chord turns minor: C becomes Cm, borrowed from G minor. Its third, E, drops a half step to E♭ and then sinks to D in the G chord. It gives a bittersweet lift just before the chorus lands on I.' },
+  { id: 'fp-maj7', genre: 'folkpop', loop: true, name: 'Imaj7–IVmaj7–vi7–V', nick: 'Dreamy maj7 colours', mode: 'major', family: 'G', capo: 4,
+    chords: [['Imaj7', '1', 'maj7'], ['IVmaj7', '4', 'maj7'], ['vi7', '6', 'm7'], ['V', '5', 'maj']],
+    grips: ['3 2 0 0 0 2', 'x 3 2 0 0 0', '0 2 2 0 3 0', 'x x 0 2 3 2'],
+    about: 'The major seventh lies a half step below the root (F♯ in Gmaj7, B in Cmaj7) and gives the soft, wistful colour. Open strings carry it: in Cmaj7 the open B string is the seventh.' },
+  { id: 'fp-sus', genre: 'folkpop', name: 'I (sus) – IV – V (sus) – I', nick: 'Sus hammer-ons and pull-offs', mode: 'major', family: 'D', capo: 2,
+    chords: [['I', '1', 'maj', 0.25], ['Isus4', '1', 'sus4', 0.25, { hammer: true }], ['I', '1', 'maj', 0.25, { hammer: true }], ['Isus2', '1', 'sus2', 0.25, { hammer: true }],
+      ['IV', '4', 'maj'],
+      ['V', '5', 'maj', 0.25], ['Vsus4', '5', 'sus4', 0.25, { hammer: true }], ['V', '5', 'maj', 0.25, { hammer: true }], ['Vsus2', '5', 'sus2', 0.25, { hammer: true }],
+      ['I', '1', 'maj']],
+    grips: ['x x 0 2 3 2', 'x x 0 2 3 3', 'x x 0 2 3 2', 'x x 0 2 3 0', '3 2 0 0 3 3', 'x 0 2 2 2 0', 'x 0 2 2 3 0', 'x 0 2 2 2 0', 'x 0 2 2 0 0', 'x x 0 2 3 2'],
+    about: 'Keep the chord and let the top note move: the little finger hammers on for sus4, then the fingers pull off back to the chord and on to sus2. D → Dsus4 → D → Dsus2, and the same with A. In Play along these changes sound as hammer-ons and pull-offs, without a new strum.' },
+  { id: 'fp-walkdown-c', genre: 'folkpop', name: 'I–V⁶–vi–V–IV–I⁶–ii7–V', nick: 'Falling bass line', mode: 'major', family: 'C', capo: 3,
+    chords: [['I', '1', 'maj', 0.5], ['V⁶', '5', 'maj', 0.5, { bass: '7' }], ['vi', '6', 'min', 0.5], ['V', '5', 'maj', 0.5],
+      ['IV', '4', 'maj', 0.5], ['I⁶', '1', 'maj', 0.5, { bass: '3' }], ['ii7', '2', 'm7', 0.5], ['V', '5', 'maj', 0.5]],
+    grips: ['x 3 2 0 1 0', 'x 2 0 0 0 3', 'x 0 2 2 1 0', '3 2 0 0 0 3', 'x x 3 2 1 1', '0 3 2 0 1 0', 'x x 0 2 1 1', '3 2 0 0 0 3'],
+    about: 'The lowest note walks down the C major scale, C B A G F E D, with a new chord every second beat. G/B and C/E are slash chords: the chord before the slash, the bass note after it.' },
+  { id: 'fp-melancholy', genre: 'folkpop', loop: true, name: 'vi7–IVmaj7–I–V', nick: 'Melancholic start on vi', mode: 'major', family: 'C', capo: 5,
+    chords: [['vi7', '6', 'm7'], ['IVmaj7', '4', 'maj7'], ['I', '1', 'maj'], ['V', '5', 'maj']],
+    grips: ['x 0 2 0 1 0', 'x x 3 2 1 0', 'x 3 2 0 1 0', '3 2 0 0 0 3'],
+    about: 'The four chords of the pop progression, but starting on the minor vi chord, so the loop feels melancholic instead of upbeat. Start it on I to hear the difference.' }
 ];
+// Kinds of progressions. The folk-pop card lists the typical spices of the style and the progression that shows each one.
+const GENRES = [
+  { id: 'classic', name: 'Classic progressions' },
+  { id: 'folkpop', name: 'Acoustic Indie Folk-Pop',
+    artists: ['Vance Joy', 'Jonah Kagen', 'Sons of the East', 'Hollow Coves', 'Matthew Mole', 'Ocie Elliott', 'The Lumineers', 'Buffalo Traffic Jam', 'Henry and the Waiter', 'Jack and the Waiterman', 'Just Pete'],
+    about: 'Simple chords from one key, played with open shapes so the strings ring, a capo to put them in the singer’s key, and small decorations that keep the chords moving.',
+    spices: [
+      { name: 'Sus decorations', text: 'Hammer on and pull off the sus notes while you strum: D → Dsus4 → D → Dsus2.', prog: 'fp-sus' },
+      { name: 'Anchor fingers', text: 'Fingers 3 and 4 stay on fret 3 of the B and e strings, so those notes ring through G (320033), Cadd9 (x32033), Em7 (022033) and Dsus4 (xx0233).', prog: 'fp-anchor' },
+      { name: 'Borrowed iv', text: 'C turns into Cm before the chorus in G: a bittersweet sting borrowed from G minor.', prog: 'fp-borrowed' },
+      { name: 'Maj7 colours', text: 'Cmaj7 and Gmaj7 instead of C and G make it dreamy and wistful.', prog: 'fp-maj7' },
+      { name: 'Falling bass line', text: 'Slash chords walk the bass down: C → G/B → Am, or G → D/F♯ → Em7.', prog: 'fp-walkdown-c' },
+      { name: 'Same chords, new start', text: 'Start the loop on vi for melancholy, on I for an upbeat feel.', prog: 'fp-anchor', start: 2 },
+      { name: 'Capo', text: 'G or C shapes with the capo on fret 2 to 5 keep the open strings ringing in any key.', prog: 'fp-melancholy' },
+      { name: 'Folk strum', text: 'Down, down-up, skip, up-down-up (D DU UDU): the light, lilting strum of the style.', prog: 'fp-anchor', strum: 'folk' }
+    ] }
+];
+const progGenre = prog => prog.genre || 'classic';
 // The name of a key: major keys with flats (Db, Eb, Ab, Bb), minor keys with sharps (C#m, F#m, G#m)
 const keyName = (pc, mode) => (mode === 'minor' ? MINOR_ROOTS : ROOTS)[((pc % 12) + 12) % 12];
 // A grip near the nut with open strings, the kind found in chord books as an open chord
@@ -281,15 +342,40 @@ function openGrip(rootPc, q) { return chordShapes(rootPc, q).find(isOpenGrip) ||
 // with capo 2, A major is played with the shapes of G major.
 function progressionChords(prog, keyPc, capo = 0) {
   const key = keyName(keyPc, prog.mode), shapeKey = keyName(keyPc - capo, prog.mode);
-  let bar = 0;
-  return prog.chords.map(([roman, iv, q, bars = 1]) => {
+  const slash = b => b ? '/' + noteName(b) : '';
+  let beat = 0;
+  return prog.chords.map(([roman, iv, q, bars = 1, opts = {}], i) => {
     const root = spellRaw(key, iv), shapeRoot = spellRaw(shapeKey, iv);
-    const c = { roman, iv, q, bars, bar, root, shapeRoot, symbol: chordSymbol(root, q), shapeSymbol: chordSymbol(shapeRoot, q) };
-    bar += bars;
+    const bass = opts.bass ? spellRaw(key, opts.bass) : null, shapeBass = opts.bass ? spellRaw(shapeKey, opts.bass) : null;
+    const c = {
+      i, roman, iv, q, bars, beats: Math.round(bars * 4), beat, bar: beat / 4, root, shapeRoot, bass, shapeBass,
+      borrowed: !!opts.borrowed, hammer: !!opts.hammer,
+      symbol: chordSymbol(root, q) + slash(bass), shapeSymbol: chordSymbol(shapeRoot, q) + slash(shapeBass),
+      grip: prog.grips ? parseGrip(prog.grips[i]) : null
+    };
+    beat += c.beats;
     return c;
   });
 }
 const progressionBars = prog => prog.chords.reduce((n, c) => n + (c[3] || 1), 0);
+// A loop started on another chord: the same chords in the same order, so the same voicings
+function rotateProgression(prog, start) {
+  if (!prog.loop || !start) return prog;
+  const k = ((start % prog.chords.length) + prog.chords.length) % prog.chords.length, turn = a => a.slice(k).concat(a.slice(0, k));
+  return { ...prog, chords: turn(prog.chords), grips: prog.grips && turn(prog.grips), name: turn(prog.chords).map(c => c[0]).join('–') };
+}
+// For a progression played in one family of shapes: the capo that makes it sound in the key keyPc
+const familyCapo = (prog, keyPc) => ((keyPc - parseNote(prog.family).pc) % 12 + 12) % 12;
+// Fretted notes that are the same in every grip of the progression: fingers that stay put (anchor fingers)
+function progressionAnchors(prog) {
+  if (!prog.grips || prog.grips.length < 2) return [];
+  const grips = prog.grips.map(parseGrip), out = [];
+  for (let st = 0; st < 6; st++) {
+    const f = grips[0][st];
+    if (f > 0 && grips.every(g => g[st] === f)) out.push(st + ':' + f);
+  }
+  return out;
+}
 // Capo positions (up to maxCapo) where every chord of the progression has an open grip
 function capoSuggestions(prog, keyPc, maxCapo = 9) {
   const out = [];
