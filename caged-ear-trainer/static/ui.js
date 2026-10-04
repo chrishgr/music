@@ -19,7 +19,9 @@ const DEFAULTS = {
   chord: 'maj', chordShape: 'E', chordAll: true,
   cagedQ: 'maj', shape: 'all', cagedScale: '', cagedCompare: true,
   cpType: 'play', cpQ: ['maj', 'min', '7'], cpShapes: [...SHAPE_ORDER],
-  triShape: 'G', capo: 0, triSet: '3', triPos: 0, triAuto: true, pType: 'play', pRandCapo: true
+  triShape: 'G', capo: 0, triSet: '3', triPos: 0, triAuto: true, pType: 'play', pRandCapo: true,
+  bpm: 80, beats: 4, subdiv: 1, accent: true, clickVol: 0.8, drill: 'ladder', drillSet: {}, omcLog: {},
+  prog: 'pop', progCapo: 0, progBpm: 90, progStrum: 'beats', progClick: true, progLoop: true
 };
 const state = {};
 for (const k of Object.keys(DEFAULTS)) state[k] = saved[k] !== undefined ? saved[k] : DEFAULTS[k];
@@ -32,7 +34,7 @@ if (state.shape !== 'all' && !SHAPE_ORDER.includes(state.shape)) state.shape = '
 if (saved.showScale && saved.cagedScale === undefined) state.cagedScale = 'major';
 if (!Array.isArray(state.cpQ) || !state.cpQ.length) state.cpQ = [...DEFAULTS.cpQ];
 if (!Array.isArray(state.cpShapes) || !state.cpShapes.length) state.cpShapes = [...DEFAULTS.cpShapes];
-if (typeof state.sub !== 'object' || !state.sub) state.sub = {};
+for (const k of ['sub', 'drillSet', 'omcLog']) if (typeof state[k] !== 'object' || !state[k] || Array.isArray(state[k])) state[k] = {};
 naming.system = state.notation;
 
 // Pages with their own saved data (ear statistics, tuner settings) register a function here
@@ -71,29 +73,46 @@ function buffer(m, inst) {
   }
   return audio.cache.get(key);
 }
-// Run fn when a note scheduled `sec` seconds from now starts to sound. stopAll() cancels it.
-function later(sec, fn) {
-  const t = setTimeout(() => { audio.timers = audio.timers.filter(x => x !== t); fn(); }, Math.max(0, (sec + 0.03) * 1000));
+// Run fn at the audio-clock time `when` (when that sound starts). stopAll() cancels it.
+function atTime(when, fn) {
+  const t = setTimeout(() => { audio.timers = audio.timers.filter(x => x !== t); fn(); }, Math.max(0, (when - ctx().currentTime) * 1000));
   audio.timers.push(t);
 }
-// Play MIDI note m after `at` seconds. `where` decides what lights up on the neck when it sounds:
-// 'string:fret' for one place, '*' for every place the note can be played, null for the piano only.
-function play(m, at = 0, inst = state.inst, where = null, vol = 1) {
-  const c = ctx();
-  const src = c.createBufferSource(), g = c.createGain();
-  const b = buffer(m, inst);
+// Run fn when a note scheduled `sec` seconds from now starts to sound
+const later = (sec, fn) => atTime(ctx().currentTime + 0.03 + sec, fn);
+function startBuffer(b, when, gain) {
+  const c = ctx(), src = c.createBufferSource(), g = c.createGain();
   src.buffer = b.buf;
   src.playbackRate.value = b.rate;   // fine-tunes the pluck to the exact target pitch
-  g.gain.value = (inst === 'guitar' ? 0.55 : 1) * vol;
+  g.gain.value = gain;
   src.connect(g); g.connect(audio.master);
-  src.start(c.currentTime + 0.03 + at);
+  src.start(Math.max(when, c.currentTime));
   audio.live.push(src);
   src.onended = () => { audio.live = audio.live.filter(s => s !== src); };
-  later(at, () => flash(m, where));
+}
+// Play MIDI note m at the audio-clock time `when`. `where` decides what lights up on the neck when it sounds:
+// 'string:fret' for one place, '*' for every place the note can be played, null for the piano only.
+function playAt(m, when, inst = state.inst, where = null, vol = 1) {
+  startBuffer(buffer(m, inst), when, (inst === 'guitar' ? 0.55 : 1) * vol);
+  atTime(when, () => flash(m, where));
+}
+// Play MIDI note m `at` seconds from now
+function play(m, at = 0, inst = state.inst, where = null, vol = 1) { playAt(m, ctx().currentTime + 0.03 + at, inst, where, vol); }
+// Metronome click. An accent on beat 1 is higher than the other beats, and subdivisions are softer.
+const CLICKS = { accent: [1650, 1], beat: [1100, 0.75], sub: [820, 0.38] };
+function clickAt(kind, when, vol = state.clickVol) {
+  const key = 'click' + kind;
+  if (!audio.cache.has(key)) {
+    const c = ctx(), r = synthClick(CLICKS[kind][0], c.sampleRate), buf = c.createBuffer(1, r.samples.length, c.sampleRate);
+    buf.getChannelData(0).set(r.samples);
+    audio.cache.set(key, { buf, rate: 1 });
+  }
+  startBuffer(audio.cache.get(key), when, CLICKS[kind][1] * vol);
 }
 // Pages that show what is playing (a lit band, a highlighted diagram) reset it here when the sound stops
 const STOP_HOOKS = [];
 function stopAll() {
+  stopClock();
   audio.live.forEach(s => { try { s.stop(); } catch (e) { /* already stopped */ } });
   audio.live = [];
   audio.timers.forEach(clearTimeout);
@@ -101,7 +120,11 @@ function stopAll() {
   STOP_HOOKS.forEach(fn => fn());
 }
 const noteKey = (st, f) => st + ':' + f;
-// Strum a position from the lowest string up, every note lighting up where it is played
+// Strum a position from the lowest string up (or the highest, for an up-strum), every note lighting up where it is played
+function strumAt(p, when, inst = state.inst, { gap = 0.045, up = false, vol = 1 } = {}) {
+  const notes = p.frets.map((f, k) => f < 0 ? null : { m: TUNING[p.strings[k]] + f, where: noteKey(p.strings[k], f) }).filter(Boolean);
+  (up ? notes.reverse() : notes).forEach((n, i) => playAt(n.m, when + i * gap, inst, n.where, vol));
+}
 function strum(p, at = 0, inst = state.inst, gap = 0.045) {
   p.frets.forEach((f, k) => { if (f >= 0) play(TUNING[p.strings[k]] + f, at + k * gap, inst, noteKey(p.strings[k], f)); });
 }
@@ -110,6 +133,35 @@ function arpeggio(p, at = 0, inst = state.inst, step = 0.3) {
   const notes = p.frets.map((f, k) => f < 0 ? null : { m: TUNING[p.strings[k]] + f, where: noteKey(p.strings[k], f) }).filter(Boolean);
   notes.forEach((n, i) => play(n.m, at + i * step, inst, n.where));
   strum(p, at + notes.length * step + 0.25, inst);
+}
+
+/* ================= CLOCK (the metronome and anything played in time) =================
+   Look-ahead scheduling: a timer wakes up every 25 ms and puts every beat that starts within the next
+   0.12 s on the audio clock, which keeps exact time even when the page is busy drawing.
+   cfg = { bpm(bar), beats(), onBeat({ bar, beat, beats, bpm, len }, when) }. bpm and beats are read
+   again on every beat, so tempo changes and the speed trainer take effect right away. */
+const CLOCK = { running: false, timer: null, next: 0, bar: 0, beat: 0 };
+function startClock(cfg) {
+  stopClock();
+  const c = ctx();
+  Object.assign(CLOCK, { running: true, next: c.currentTime + 0.12, bar: 0, beat: 0 });
+  const tick = () => {
+    while (CLOCK.running && CLOCK.next < c.currentTime + 0.12) {
+      const beats = cfg.beats();
+      if (CLOCK.beat >= beats) { CLOCK.beat = 0; CLOCK.bar++; }
+      const bpm = cfg.bpm(CLOCK.bar), len = 60 / bpm;
+      cfg.onBeat({ bar: CLOCK.bar, beat: CLOCK.beat, beats, bpm, len }, CLOCK.next);
+      CLOCK.next += len;
+      CLOCK.beat++;   // wraps to the next bar on the next beat, which also handles fewer beats per bar
+    }
+  };
+  CLOCK.timer = setInterval(tick, 25);
+  tick();
+}
+function stopClock() { clearInterval(CLOCK.timer); CLOCK.timer = null; CLOCK.running = false; }
+// Clicks for one beat, from beatClicks() in theory.js
+function clickBeat(plan, info, when) {
+  beatClicks(plan, info.beat).forEach(k => clickAt(k.kind, when + k.at * info.len));
 }
 
 /* ================= NOTES THAT FOLLOW THE SOUND ================= */
@@ -150,6 +202,7 @@ const rootPc = () => parseNote(state.root).pc;
 
 // The text inside a dot follows the Labels choice: note name, degree (1 b3 5), interval (R m3 P5) or shape name
 function labelOf(item) {
+  if (item.label) return item.label;   // a fixed label, such as a finger number
   const mode = state.labels === 'shape' && !item.shapeName ? 'name' : state.labels;
   return mode === 'interval' ? ivFmt(item.iv) : mode === 'quality' ? intervalName(item.iv) : mode === 'shape' ? item.shapeName : item.name;
 }
@@ -346,6 +399,9 @@ function route() {
   save();
   for (const id of Object.keys(PAGES)) $('page-' + id).hidden = id !== page;
   $$('#nav a').forEach(a => { if (a.dataset.page === page) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  // On a narrow screen the links scroll sideways: keep the current one in view
+  const nav = $('nav'), link = nav.querySelector('[aria-current]');
+  if (link) nav.scrollLeft = link.offsetLeft - nav.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2;
   const el = $('page-' + page);
   $$('.subtabs a', el).forEach(a => { if (a.dataset.sub === sub) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   $$('.sub', el).forEach(s => { s.hidden = s.dataset.sub !== sub; });
