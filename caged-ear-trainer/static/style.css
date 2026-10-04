@@ -352,6 +352,51 @@ a.more { color: var(--accent); font-weight: 700; text-underline-offset: 3px; }
 .voicing b { color: var(--ink); }
 .note-box { border-left: 3px solid var(--accent); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.92rem; max-width: 78ch; }
 
+/* Metronome */
+.metro {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px;
+  display: grid; gap: 14px;
+}
+.metro-top { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: center; justify-content: space-between; }
+.tempo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tempo .ghost { min-width: 2.8em; font-family: var(--mono); }
+.bpm { display: grid; justify-items: center; min-width: 4.2em; line-height: 1; }
+.bpm b { font-family: var(--display); font-size: 3rem; font-variant-numeric: tabular-nums; }
+.bpm span { font-size: 0.75rem; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; margin-top: 4px; }
+#bpmRange, #pgBpm { width: 100%; accent-color: var(--accent); }
+.tempo-row { display: flex; align-items: center; gap: 8px; min-width: 260px; }
+.tempo-row input { flex: 1; }
+.beats { display: flex; flex-wrap: wrap; gap: 10px; min-height: 34px; }
+.beats i {
+  width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--line); background: var(--bg);
+  display: grid; place-items: center; font-style: normal; font-family: var(--mono); font-size: 0.8rem; color: var(--muted);
+}
+.beats i.accent { border-color: var(--accent); }
+.beats i.mute { border-style: dashed; }
+.beats i.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.beats i.on.soft { background: var(--accent-soft); color: var(--ink); }
+.phase { font-family: var(--display); font-size: 1.15rem; font-weight: 500; min-height: 1.5em; }
+.check.vol input { width: 160px; accent-color: var(--accent); }
+.drill-info { display: grid; gap: 8px; max-width: 80ch; }
+.drill-info ol { margin: 0; padding-left: 1.3em; display: grid; gap: 3px; }
+.drill-info .src { font-size: 0.85rem; color: var(--muted); }
+.countdown { display: flex; align-items: baseline; gap: 10px; }
+.countdown b { font-family: var(--display); font-size: 3.4rem; font-variant-numeric: tabular-nums; line-height: 1; }
+.countdown span { color: var(--muted); font-weight: 700; }
+
+/* Progressions: one cell per bar */
+.bars { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.bars button {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 10px; text-align: left;
+  display: grid; gap: 1px; min-width: 0;
+}
+.bars button:hover { border-color: var(--accent); }
+.bars button b { font-family: var(--display); font-size: 1.15rem; }
+.bars button small { font-family: var(--mono); color: var(--muted); font-size: 0.75rem; }
+.bars button.cont { opacity: 0.7; }
+.bars button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.bars button.now { border-color: var(--good); box-shadow: inset 0 0 0 2px var(--good); }
+
 @media (max-width: 560px) {
   .stage { padding: 16px; }
   select { min-width: 0; width: 100%; }
