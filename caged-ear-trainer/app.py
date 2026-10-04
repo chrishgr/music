@@ -113,6 +113,15 @@ def streaks(results: list[int]) -> tuple[int, int]:
 def create_app(db_path: Path = DEFAULT_DB) -> FastAPI:
     app = FastAPI(title="CAGED Ear Trainer", version="1.0")
 
+    # The browser must check for a newer page and scripts on every load (a quick 304 when nothing changed),
+    # otherwise it can keep showing an old version of the app for hours after an update.
+    @app.middleware("http")
+    async def always_revalidate(request, call_next):
+        response = await call_next(request)
+        if not request.url.path.startswith("/api"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     with connect(db_path) as conn:
         conn.executescript(SCHEMA)
 

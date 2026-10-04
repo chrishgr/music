@@ -399,9 +399,6 @@ function route() {
   save();
   for (const id of Object.keys(PAGES)) $('page-' + id).hidden = id !== page;
   $$('#nav a').forEach(a => { if (a.dataset.page === page) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-  // On a narrow screen the links scroll sideways: keep the current one in view
-  const nav = $('nav'), link = nav.querySelector('[aria-current]');
-  if (link) nav.scrollLeft = link.offsetLeft - nav.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2;
   const el = $('page-' + page);
   $$('.subtabs a', el).forEach(a => { if (a.dataset.sub === sub) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   $$('.sub', el).forEach(s => { s.hidden = s.dataset.sub !== sub; });
