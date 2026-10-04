@@ -131,7 +131,8 @@ function makeCagedTask() {
     options: fourOptions(label(root, q, letter), pool), detail, item };
 }
 const CPD = makeDrill({
-  prefix: 'cp', exercises: { play: 'caged_play', name: 'caged_recognize' },
+  prefix: 'cp', page: 'caged', exercises: { play: 'caged_play', name: 'caged_recognize' },
+  timerKey: () => state.cpType === 'play' ? 'caged_play' : 'caged_recognize',
   make: makeCagedTask, playPos: p => strum(p), bandLabel: p => `${p.letter} shape`, render: () => renderCaged('practice')
 });
 

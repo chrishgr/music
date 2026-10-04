@@ -219,6 +219,19 @@ svg.keys { width: 100%; max-width: 760px; min-width: 520px; height: auto; }
 .answers button.correct { border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
 .answers button.wrong { border-color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad); }
 .kbd { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); }
+/* Task timer */
+.timer-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; min-height: 30px; }
+.check.timer-sec input {
+  width: 4.5em; height: auto; font: inherit; color: inherit; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; font-variant-numeric: tabular-nums;
+}
+.countdown { display: flex; align-items: center; gap: 10px; flex: 1 1 200px; min-width: 0; }
+.countdown .track { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.countdown .track i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.countdown.low .track i { background: var(--bad); }
+.countdown.pause .track i { background: var(--muted); }
+.countdown .left { font-family: var(--mono); font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.countdown.low .left { color: var(--bad); font-weight: 700; }
 .kbd kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; background: var(--bg); font-family: inherit; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }

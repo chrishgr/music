@@ -135,7 +135,8 @@ function makeTriadTask() {
   return null;
 }
 const TPD = makeDrill({
-  prefix: 'tp', exercises: { play: 'triad_play', name: 'triad_recognize' },
+  prefix: 'tp', page: 'triads', exercises: { play: 'triad_play', name: 'triad_recognize' },
+  timerKey: () => state.pType === 'play' ? 'triad_play' : 'triad_recognize',
   make: makeTriadTask, playPos: playPosition,
   bandLabel: p => p.open ? 'Shape' : INV_SHORT[p.inversion], render: () => renderTriads('practice')
 });
