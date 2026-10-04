@@ -8,7 +8,7 @@ const HOME_CARDS = [
   { page: 'metronome', title: 'Metronome', text: 'A plain metronome with tap tempo, and eight well-known exercises for timing, speed and chord changes.' },
   { page: 'ear', title: 'Ear training', text: 'Name intervals and chord qualities by ear. The ones you miss most come up more often.' },
   { page: 'tuner', title: 'Tuner', text: 'Tune the guitar with the microphone, hit a note with your voice or instrument, or guess a note by ear.' },
-  { page: 'profile', title: 'Profile', text: 'Points, accuracy per exercise, your weakest items, the last 14 days and a leaderboard.' }
+  { page: 'profile', title: 'Profile', text: 'Your progress week by week, what to practise next, daily, weekly and monthly summaries, goals and a points leaderboard.' }
 ];
 PAGES.home = {
   title: 'Home',

@@ -129,6 +129,7 @@ function startMetro() {
   if (d && d.id === 'changes') return;
   stopAll();
   MX.running = true; MX.start = state.bpm;
+  startSession(MX, d ? 'drill' : 'metronome', d ? d.name : null, state.bpm);
   startClock({
     bpm: bar => d && d.bpmAt ? d.bpmAt(drillSettings(d), bar, MX.start) : state.bpm,
     beats: () => metroBeats(d),
@@ -155,6 +156,7 @@ function renderLights(beats, plan = null, on = -1) {
   }).join('');
 }
 function showBeat(info, plan) {
+  if (MX.session) MX.session.bpm = info.bpm;   // the speed trainer saves the tempo it reached
   renderLights(info.beats, plan, info.beat);
   $('metroPhase').textContent = plan.phase;
   if (info.bpm !== state.bpm) $('bpmVal').textContent = info.bpm;
@@ -290,9 +292,11 @@ PAGES.metronome = {
       if (!(n >= 0)) return;
       const key = omcKey();
       state.omcLog[key] = [...(state.omcLog[key] || []), { n, d: new Date().toISOString().slice(0, 10) }].slice(-30);
+      logSession('changes', key, 60, (state.drillSet.changes || {}).click ? state.bpm : null, n);
       $('omcCount').value = ''; MX.omc.phase = 'idle'; save(); renderChanges();
     });
     STOP_HOOKS.push(() => {
+      endSession(MX);
       MX.running = false;
       if (MX.omc.phase === 'count' || MX.omc.phase === 'run') { MX.omc.phase = 'idle'; clearInterval(MX.omc.timer); }
       if (current && current.page === 'metronome') { renderMetroControls(); if (drillMode() && drillNow().id === 'changes') renderChanges(); }
