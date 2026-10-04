@@ -1,6 +1,7 @@
 /* Start-up and the controls that every page shares: sound, note names, root, labels, Stop,
    clicks on a neck or a piano, and the keyboard. */
 function initGlobals() {
+  applyMode();
   setPressed($('inst'), state.inst);
   setPressed($('nota'), state.notation);
   onButton($('inst'), b => { state.inst = b.dataset.v; setPressed($('inst'), state.inst); save(); });
