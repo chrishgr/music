@@ -1,4 +1,4 @@
-/* CAGED Ear Trainer: code shared by all pages.
+/* Fretboard & Keys: code shared by all pages.
    Storage, sound (with the notes lighting up as they sound), drawing of the neck, the piano and chord
    diagrams, the page router and the practice drills. Each page lives in static/pages/. */
 
@@ -9,13 +9,13 @@ const pickOne = arr => arr[Math.floor(Math.random() * arr.length)];
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
 /* ================= STORAGE (this browser only) ================= */
-const STORE = 'caged-ear-v2';   // the same key as before the pages were split, so settings and ear statistics carry over
+const STORE = 'caged-ear-v2';   // kept from the old name and the single-page version, so settings and ear statistics carry over
 function load() { try { return JSON.parse(localStorage.getItem(STORE)) || {}; } catch (e) { return {}; } }
 const saved = load();
 const DEFAULTS = {
   page: 'home', sub: {},
-  root: 'A', labels: 'name', inst: 'guitar', mainInst: 'guitar', notation: 'intl',
-  scale: 'minpenta', scalePos: 'all', scaleKind: 'triads',
+  root: 'A', labels: 'name', inst: 'piano', soundV: 2, mainInst: 'guitar', notation: 'intl',
+  scale: 'minpenta', scalePos: 'all', scaleKind: 'triads', scaleOct: 1, pianoVoicing: 'root',
   chord: 'maj', chordShape: 'E', chordAll: true,
   cagedQ: 'maj', shape: 'all', cagedScale: '', cagedCompare: true,
   cpType: 'play', cpQ: ['maj', 'min', '7'], cpShapes: [...SHAPE_ORDER],
@@ -29,6 +29,11 @@ for (const k of Object.keys(DEFAULTS)) state[k] = saved[k] !== undefined ? saved
 // Values from older versions or a damaged store fall back to the defaults
 if (!ROOTS.includes(state.root)) state.root = DEFAULTS.root;
 if (!['guitar', 'piano'].includes(state.mainInst)) state.mainInst = DEFAULTS.mainInst;
+if (!['guitar', 'piano'].includes(state.inst)) state.inst = DEFAULTS.inst;
+// The piano became the default sound for both instruments (soundV 2). A sound saved before that was
+// almost always the old default, guitar, so it is reset to piano once; it can be changed back at the top.
+if (saved.soundV !== DEFAULTS.soundV) { state.inst = DEFAULTS.inst; state.soundV = DEFAULTS.soundV; }
+if (![1, 2].includes(state.scaleOct)) state.scaleOct = DEFAULTS.scaleOct;
 if (!CHORDS.some(c => c.id === state.chord)) state.chord = DEFAULTS.chord;
 if (!CAGED_QUALITIES.includes(state.cagedQ)) state.cagedQ = DEFAULTS.cagedQ;
 if (!SCALES.some(s => s.id === state.scale)) state.scale = DEFAULTS.scale;
@@ -145,6 +150,18 @@ function arpeggio(p, at = 0, inst = state.inst, step = 0.3) {
   notes.forEach((n, i) => play(n.m, at + i * step, inst, n.where));
   strum(p, at + notes.length * step + 0.25, inst);
 }
+// A list of MIDI notes with the piano sound, low to high: together (rolled by a few milliseconds, as a hand
+// plays a chord) or broken, one note after the other. Only the piano lights up: a piano voicing does not
+// move anything on the neck.
+function playPianoAt(ms, when, { broken = false, step = 0.28, vol = broken ? 0.95 : 0.8 } = {}) {
+  ms.forEach((m, i) => playAt(m, when + i * (broken ? step : 0.006), 'piano', null, vol));
+}
+const playPiano = (ms, { at = 0, ...opts } = {}) => playPianoAt(ms, ctx().currentTime + 0.03 + at, opts);
+// A voicing note by note, then all together
+function playPianoBroken(ms, at = 0, step = 0.28) {
+  playPiano(ms, { at, broken: true, step });
+  playPiano(ms, { at: at + ms.length * step + 0.25 });
+}
 
 /* ================= CLOCK (the metronome and anything played in time) =================
    Look-ahead scheduling: a timer wakes up every 25 ms and puts every beat that starts within the next
@@ -214,7 +231,7 @@ const rootPc = () => parseNote(state.root).pc;
 // The text inside a dot follows the Labels choice: note name, degree (1 b3 5), interval (R m3 P5) or shape name
 function labelOf(item) {
   if (item.label) return item.label;   // a fixed label, such as a finger number
-  const mode = state.labels === 'shape' && !item.shapeName ? 'name' : state.labels;
+  const mode = state.labels === 'shape' && (!item.shapeName || pianoMode()) ? 'name' : state.labels;   // shape names belong to the capo
   return mode === 'interval' ? ivFmt(item.iv) : mode === 'quality' ? intervalName(item.iv) : mode === 'shape' ? item.shapeName : item.name;
 }
 function dotSvg(x, y, item, cls, r) {
@@ -293,7 +310,7 @@ const KEY_LO = 36, KEY_OCTAVES = 4;
 function renderKeys(svg, { byPc = null, byMidi = null } = {}) {
   const W = 24, H = 104, BW = 15, BH = 64;
   const whites = [0, 2, 4, 5, 7, 9, 11], blacks = { 1: 0, 3: 1, 6: 3, 8: 4, 10: 5 };
-  const mark = m => byMidi ? byMidi.get(m) : byPc ? byPc.get(m % 12) : null;
+  const mark = m => (byMidi && byMidi.get(m)) || (byPc && byPc.get(m % 12)) || null;   // byPc marks what byMidi leaves
   let w = '', b = '';
   for (let o = 0; o < KEY_OCTAVES; o++) {
     whites.forEach((pc, i) => {
@@ -312,6 +329,35 @@ function renderKeys(svg, { byPc = null, byMidi = null } = {}) {
   }
   svg.setAttribute('viewBox', `0 0 ${7 * KEY_OCTAVES * W + 2} ${H + 2}`);
   svg.innerHTML = w + b;
+}
+// The notes of a piano voicing, for renderKeys
+const pianoMarks = (ms, tones) => new Map(ms.map(m => [m, tones.find(t => t.pc === m % 12)]));
+// The whole octaves that hold all the notes, for mini keyboards that should line up
+const octaveRange = ms => ({ lo: Math.floor(Math.min(...ms) / 12) * 12, hi: Math.floor(Math.max(...ms) / 12) * 12 + 11 });
+// A small keyboard with the notes of a piano voicing marked, over whole octaves (by default the ones the voicing needs).
+// The keys always have the same size, so voicings drawn over the same range can be compared key by key.
+function miniKeysSvg(ms, tones, range = octaveRange(ms)) {
+  const W = 9, H = 40, BW = 6, BH = 24, keys = [], { lo, hi } = range;
+  let x = 1;
+  for (let m = lo; m <= hi; m++) {
+    const black = [1, 3, 6, 8, 10].includes(m % 12);
+    keys.push({ m, black, x: black ? x - BW / 2 : x });
+    if (!black) x += W;
+  }
+  const dot = k => {
+    const t = tones.find(y => y.pc === k.m % 12);
+    return `<g class="dot ${t ? t.role : 'other'}"><circle cx="${k.x + (k.black ? BW : W) / 2}" cy="${k.black ? BH - 5 : H - 6}" r="${k.black ? 2.6 : 3.2}"/></g>`;
+  };
+  const on = keys.filter(k => ms.includes(k.m));
+  return `<svg class="mini-keys" viewBox="0 0 ${x + 1} ${H + 2}" width="${x + 1}" height="${H + 2}" aria-hidden="true">` +
+    keys.filter(k => !k.black).map(k => `<rect class="k-white" x="${k.x}" y="1" width="${W}" height="${H}" rx="1.5"/>`).join('') +
+    on.filter(k => !k.black).map(dot).join('') +
+    keys.filter(k => k.black).map(k => `<rect class="k-black" x="${k.x}" y="1" width="${BW}" height="${BH}" rx="1"/>`).join('') +
+    on.filter(k => k.black).map(dot).join('') + '</svg>';
+}
+// A button for a piano voicing, in the place where the guitar pages have chord diagrams
+function voicingButton(v, tones, { i, title, sub, pressed = false, playing = false, range }) {
+  return `<button class="box pv${playing ? ' playing' : ''}" data-i="${i}" aria-pressed="${pressed}">${miniKeysSvg(v.notes, tones, range)}<b>${title}</b><small>${sub}</small></button>`;
 }
 // The exact notes of a position, for renderKeys
 function midiMarks(p, tones) {
@@ -371,7 +417,7 @@ function renderRootPickers() {
 const LABEL_OPTS = [['name', 'Note names'], ['interval', 'Degrees'], ['quality', 'Intervals'], ['shape', 'Shape names']];
 function renderLabelPickers() {
   $$('[data-labels]').forEach(el => {
-    const withShape = el.dataset.labels === 'shape';
+    const withShape = el.dataset.labels === 'shape' && !pianoMode();
     const v = state.labels === 'shape' && !withShape ? 'name' : state.labels;
     el.innerHTML = LABEL_OPTS.filter(([k]) => k !== 'shape' || withShape)
       .map(([k, t]) => `<button data-v="${k}" aria-pressed="${k === v}">${t}</button>`).join('');
@@ -394,7 +440,7 @@ function parseHash() {
 function go(page, sub) { location.hash = '#/' + (page === 'home' ? '' : page + (sub ? '/' + sub : '')); }
 function route() {
   let { page, sub } = parseHash();
-  if (!PAGES[page]) page = 'home';
+  if (!PAGES[page] || (pianoMode() && GUITAR_PAGES.includes(page))) page = 'home';   // CAGED and Triads are guitar pages
   const P = PAGES[page];
   if (P.subs) {
     if (!P.subs.includes(sub)) sub = P.subs.includes(state.sub[page]) ? state.sub[page] : P.subs[0];
@@ -416,7 +462,7 @@ function route() {
   $$('.sub', el).forEach(s => { s.hidden = s.dataset.sub !== sub; });
   const canonical = '#/' + (page === 'home' ? '' : page + (P.subs ? '/' + sub : ''));
   if (location.hash !== canonical) history.replaceState(null, '', canonical);
-  document.title = (page === 'home' ? '' : P.title + ' · ') + 'CAGED Ear Trainer';
+  document.title = (page === 'home' ? '' : P.title + ' · ') + 'Fretboard & Keys';
   if (changedPage) window.scrollTo(0, 0);
   rerender();
 }
@@ -432,14 +478,17 @@ function rerender() {
    The main instrument, chosen on the Home page, is drawn large at the top of each page and the other one
    smaller further down. A page marks the two places with data-slot="main" and data-slot="second", and the
    neck and the piano are moved between them, so the code that draws them is the same either way.
-   The CAGED and Triads practice keep the guitar large, because their tasks are answered on the neck. */
-const NECK_TASKS = { caged: 'practice', triads: 'practice' };
-const mainInstrument = (page, sub) => state.mainInst === 'piano' && NECK_TASKS[page] !== sub ? 'piano' : 'guitar';
+   With the piano as main instrument (piano mode) the pages also play and show piano voicings, and the
+   guitar-only pages, CAGED and Triads, are hidden: the body gets the class piano-mode, and anything marked
+   data-mode="guitar" or data-mode="piano" shows only in that mode. */
+const pianoMode = () => state.mainInst === 'piano';
+const GUITAR_PAGES = ['caged', 'triads'];
+function applyMode() { document.body.classList.toggle('piano-mode', pianoMode()); }
 function placeInstruments() {
   const el = $('page-' + current.page);
   const main = el.querySelector('[data-slot="main"]'), second = el.querySelector('[data-slot="second"]');
   if (!main || !second) return;
-  const big = mainInstrument(current.page, current.sub);
+  const big = state.mainInst;
   $$('.inst-block', el).forEach(b => {
     const slot = b.dataset.inst === big ? main : second;
     if (b.parentElement !== slot) slot.appendChild(b);
