@@ -21,7 +21,8 @@ const DEFAULTS = {
   cpType: 'play', cpQ: ['maj', 'min', '7'], cpShapes: [...SHAPE_ORDER],
   triShape: 'G', capo: 0, triSet: '3', triPos: 0, triAuto: true, pType: 'play', pRandCapo: true,
   bpm: 80, beats: 4, subdiv: 1, accent: true, clickVol: 0.8, drill: 'ladder', drillSet: {}, omcLog: {},
-  prog: 'pop', progCapo: 0, progBpm: 90, progStrum: 'beats', progClick: true, progLoop: true, progGenre: 'classic', progStart: 0
+  prog: 'pop', progCapo: 0, progBpm: 90, progStrum: 'beats', progClick: true, progLoop: true, progGenre: 'classic', progStart: 0,
+  timers: {}
 };
 const state = {};
 for (const k of Object.keys(DEFAULTS)) state[k] = saved[k] !== undefined ? saved[k] : DEFAULTS[k];
@@ -34,7 +35,7 @@ if (state.shape !== 'all' && !SHAPE_ORDER.includes(state.shape)) state.shape = '
 if (saved.showScale && saved.cagedScale === undefined) state.cagedScale = 'major';
 if (!Array.isArray(state.cpQ) || !state.cpQ.length) state.cpQ = [...DEFAULTS.cpQ];
 if (!Array.isArray(state.cpShapes) || !state.cpShapes.length) state.cpShapes = [...DEFAULTS.cpShapes];
-for (const k of ['sub', 'drillSet', 'omcLog']) if (typeof state[k] !== 'object' || !state[k] || Array.isArray(state[k])) state[k] = {};
+for (const k of ['sub', 'drillSet', 'omcLog', 'timers']) if (typeof state[k] !== 'object' || !state[k] || Array.isArray(state[k])) state[k] = {};
 naming.system = state.notation;
 
 // Pages with their own saved data (ear statistics, tuner settings) register a function here
@@ -429,12 +430,19 @@ function rerender() {
    Shared by the triad and CAGED practice. A task is either
    - "play": the page names a chord and a shape, the user clicks its notes on the neck and checks, or
    - "name": the neck shows a grip and the user picks its name from four answers.
-   cfg = { prefix, exercises: { play, name }, make(), playPos(p), bandLabel(p), render() } */
+   cfg = { prefix, page, exercises: { play, name }, timerKey(), make(), playPos(p), bandLabel(p), render() } */
 function makeDrill(cfg) {
-  const D = { task: null, taps: new Set(), checked: false, choice: null, ok: false, shownOnly: false, right: 0, total: 0 };
+  const D = { task: null, taps: new Set(), checked: false, choice: null, ok: false, shownOnly: false, timedOut: false, right: 0, total: 0 };
   const id = s => $(cfg.prefix + s);
-  D.clear = () => { D.task = null; D.taps = new Set(); D.checked = false; D.choice = null; };
-  D.next = () => { stopAll(); D.task = cfg.make(); D.taps = new Set(); D.checked = false; D.choice = null; cfg.render(); };
+  D.timer = makeTimer({
+    prefix: cfg.prefix, page: cfg.page, subs: ['practice'], key: cfg.timerKey,
+    waiting: () => !!D.task && !D.revealed(), timeUp: () => D.timeUp(), next: () => D.next()
+  });
+  D.clear = () => { D.timer.cancel(); D.task = null; D.taps = new Set(); D.checked = false; D.choice = null; D.timedOut = false; };
+  D.next = () => {
+    stopAll(); D.task = cfg.make(); D.taps = new Set(); D.checked = false; D.choice = null; D.timedOut = false;
+    D.timer.start(); cfg.render();
+  };
   D.revealed = () => !!D.task && (D.checked || (D.task.kind === 'name' && D.choice !== null));
   // After checking, show the accepted answer closest to what was clicked
   D.shown = () => {
@@ -458,6 +466,7 @@ function makeDrill(cfg) {
     D.shownOnly = showOnly;
     D.total++; if (D.ok) D.right++;
     logAttempt(cfg.exercises.play, t.item, showOnly ? 'Showed the answer' : D.ok ? 'Correct grip' : 'Wrong grip', D.ok);
+    D.timer.answered(D.ok);
     cfg.render();
     stopAll(); cfg.playPos(D.shown());
   };
@@ -468,8 +477,23 @@ function makeDrill(cfg) {
     D.ok = t.options.list[i] === t.options.correct;
     D.total++; if (D.ok) D.right++;
     logAttempt(cfg.exercises.name, t.item, t.options.list[i], D.ok);
+    D.timer.answered(D.ok);
     cfg.render();
     stopAll(); cfg.playPos(t.target);
+  };
+  // The time ran out. Marks already placed on the neck are checked as they are; with no marks, or no
+  // answer chosen, the task counts as wrong. Either way the answer is shown and heard.
+  D.timeUp = () => {
+    const t = D.task;
+    if (!t || D.revealed()) return false;
+    D.timedOut = true;
+    if (t.kind === 'play' && D.taps.size) { D.check(false); return D.ok; }
+    if (t.kind === 'play') { D.checked = true; D.shownOnly = false; } else D.choice = -1;
+    D.ok = false; D.total++;
+    logAttempt(cfg.exercises[t.kind], t.item, 'Time ran out', false);
+    cfg.render();
+    stopAll(); cfg.playPos(t.kind === 'play' ? D.shown() : t.target);
+    return false;
   };
   D.hear = () => { if (!D.task) return; stopAll(); cfg.playPos(D.task.kind === 'play' ? D.shown() : D.task.target); };
   // What the neck shows for the current task
@@ -509,9 +533,11 @@ function makeDrill(cfg) {
     id('Prompt').textContent = t ? t.prompt : idlePrompt;
     let fb = '';
     if (t && rev) {
-      if (t.kind === 'name') fb = `<span class="verdict ${D.ok ? 'good' : 'bad'}">${D.ok ? 'Correct' : 'It was ' + t.options.correct}</span><span class="sub">${t.detail}</span>`;
+      const late = D.timedOut ? 'Time is up. ' : '';
+      if (t.kind === 'name') fb = `<span class="verdict ${D.ok ? 'good' : 'bad'}">${D.ok ? 'Correct' : late + 'It was ' + t.options.correct}</span><span class="sub">${t.detail}</span>`;
       else if (D.shownOnly) fb = `<span class="verdict">The answer is shown on the fretboard</span><span class="sub">${t.detail}</span>`;
-      else fb = `<span class="verdict ${D.ok ? 'good' : 'bad'}">${D.ok ? 'Correct' : 'Not quite. Dashed rings are notes that do not belong.'}</span><span class="sub">${t.detail}${t.acceptNote && t.accepted.length > 1 ? ' ' + t.acceptNote : ''}</span>`;
+      else if (D.timedOut && !D.taps.size) fb = `<span class="verdict bad">Time is up. The answer is shown on the fretboard</span><span class="sub">${t.detail}</span>`;
+      else fb = `<span class="verdict ${D.ok ? 'good' : 'bad'}">${D.ok ? 'Correct' + (D.timedOut ? ', checked when the time ran out' : '') : late + 'Not quite. Dashed rings are notes that do not belong.'}</span><span class="sub">${t.detail}${t.acceptNote && t.accepted.length > 1 ? ' ' + t.acceptNote : ''}</span>`;
     }
     id('Feedback').innerHTML = fb;
     id('Answers').innerHTML = t && t.kind === 'name' ? t.options.list.map((o, i) => {
@@ -527,6 +553,7 @@ function makeDrill(cfg) {
     id('Keys').innerHTML = play
       ? '<kbd>N</kbd> new task &nbsp; <kbd>Enter</kbd> check &nbsp; Click a marked spot again to remove it.'
       : '<kbd>N</kbd> new task &nbsp; <kbd>1</kbd> to <kbd>4</kbd> answer';
+    D.timer.render();
   };
   D.bind = () => {
     id('New').addEventListener('click', D.next);
@@ -535,6 +562,7 @@ function makeDrill(cfg) {
     id('Clear').addEventListener('click', () => { D.taps.clear(); cfg.render(); });
     id('Hear').addEventListener('click', D.hear);
     onButton(id('Answers'), b => D.answer(+b.dataset.o));
+    D.timer.bind();
   };
   return D;
 }
@@ -549,6 +577,7 @@ $$('[data-drill]').forEach(el => {
   const p = el.dataset.drill;
   el.innerHTML = `
     <div class="stage-head"><p class="prompt" id="${p}Prompt"></p><p class="score" id="${p}Score"></p></div>
+    <div data-timer="${p}"></div>
     <div class="feedback" aria-live="polite" id="${p}Feedback"></div>
     <div class="answers" id="${p}Answers"></div>
     <div class="presets">
@@ -559,4 +588,92 @@ $$('[data-drill]').forEach(el => {
       <button class="ghost" id="${p}Hear">Hear it</button>
     </div>
     <p class="kbd" id="${p}Keys"></p>`;
+});
+
+/* ================= TASK TIMER =================
+   An optional time limit for each task, the same in every exercise. Ticking "Timer" shows the seconds field
+   (30 by default). When the time runs out, a task that has not been answered counts as a wrong answer and
+   the answer is shown. After a short look at the answer the next task comes by itself, and so it does after
+   an answer given in time, so a timed round runs on its own until the box is unticked.
+   Each exercise keeps its own setting in state.timers. */
+const TIMER = { def: 30, min: 3, max: 600, pauseRight: 2, pauseWrong: 4 };   // seconds
+function timerSetting(key) {
+  const t = state.timers[key] || {}, sec = Math.round(+t.sec);
+  return { on: !!t.on, sec: sec >= TIMER.min && sec <= TIMER.max ? sec : TIMER.def };
+}
+// cfg = { prefix, page, subs (optional), key(), waiting(), timeUp(), next() }
+// waiting(): a task is on screen and not answered yet. timeUp(): count it as wrong, show the answer,
+// and return true if it was right after all.
+function makeTimer(cfg) {
+  const T = { phase: 'idle', end: 0, length: 0, iv: null };   // phase: idle, running (the task), timeup (being scored) or pause (before the next)
+  const id = s => $(cfg.prefix + s);
+  const here = () => !!current && current.page === cfg.page && (!cfg.subs || cfg.subs.includes(current.sub));
+  const stopTicking = () => { clearInterval(T.iv); T.iv = null; };
+  function run(phase, seconds) {
+    stopTicking();
+    Object.assign(T, { phase, length: seconds, end: performance.now() + seconds * 1000 });
+    T.iv = setInterval(tick, 100);
+    T.draw();
+  }
+  function tick() {
+    if (!here()) { T.cancel(); return; }   // the page was left: no time runs out unseen
+    if (performance.now() < T.end) { T.draw(); return; }
+    if (T.phase === 'running') {
+      stopTicking(); T.phase = 'timeup';
+      const ok = cfg.timeUp();   // true only when marks placed on the neck turn out right
+      run('pause', ok ? TIMER.pauseRight : TIMER.pauseWrong);
+    } else { T.cancel(); cfg.next(); }
+  }
+  T.cancel = () => { stopTicking(); T.phase = 'idle'; T.draw(); };
+  // A new task is on screen: count down if the timer is on
+  T.start = () => {
+    const s = timerSetting(cfg.key());
+    if (s.on && cfg.waiting()) run('running', s.sec); else T.cancel();
+  };
+  // Answered in time: stop counting and go on after a look at the answer
+  T.answered = ok => { if (T.phase === 'running') run('pause', ok ? TIMER.pauseRight : TIMER.pauseWrong); };
+  T.draw = () => {
+    const box = id('Countdown');
+    box.hidden = T.phase === 'idle';
+    if (T.phase === 'idle') return;
+    const left = Math.max(0, (T.end - performance.now()) / 1000);
+    box.classList.toggle('pause', T.phase === 'pause');
+    box.classList.toggle('low', T.phase === 'running' && left <= Math.min(5, T.length / 3));
+    box.querySelector('i').style.width = `${(100 * left / T.length).toFixed(1)}%`;
+    const txt = T.phase === 'running' ? `${Math.ceil(left)} s left` : `Next task in ${Math.ceil(left)} s`;
+    const label = box.querySelector('.left');
+    if (label.textContent !== txt) label.textContent = txt;
+  };
+  // Show the setting of the exercise that is on screen
+  T.render = () => {
+    const s = timerSetting(cfg.key());
+    id('TimerOn').checked = s.on;
+    id('TimerSecBox').hidden = !s.on;
+    if (document.activeElement !== id('TimerSec')) id('TimerSec').value = s.sec;
+    T.draw();
+  };
+  T.bind = () => {
+    const set = (k, v) => { const key = cfg.key(); state.timers[key] = { ...timerSetting(key), [k]: v }; save(); };
+    id('TimerOn').addEventListener('change', e => {
+      set('on', e.target.checked);
+      if (!e.target.checked) T.cancel();
+      else if (T.phase === 'idle') T.start();   // a task already on screen gets its time from now
+      T.render();
+    });
+    id('TimerSec').addEventListener('change', e => {
+      const v = Math.round(+e.target.value);
+      if (v >= TIMER.min && v <= TIMER.max) set('sec', v);
+      e.target.value = timerSetting(cfg.key()).sec;
+    });
+  };
+  return T;
+}
+// The timer controls are the same in every exercise, so they are written here once
+$$('[data-timer]').forEach(el => {
+  const p = el.dataset.timer;
+  el.className = 'timer-row';
+  el.innerHTML = `
+    <label class="check"><input type="checkbox" id="${p}TimerOn"> Timer</label>
+    <label class="check timer-sec" id="${p}TimerSecBox" hidden><input type="number" id="${p}TimerSec" min="${TIMER.min}" max="${TIMER.max}" step="1" inputmode="numeric" value="${TIMER.def}"> seconds per task</label>
+    <div class="countdown" id="${p}Countdown" role="timer" aria-label="Time left for this task" hidden><span class="track"><i></i></span><span class="left"></span></div>`;
 });

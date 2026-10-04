@@ -29,6 +29,10 @@ const E = {
 SAVERS.ear = () => ({ mode: E.mode, dir: E.dir, iv: [...E.iv], ch: [...E.ch], stats: E.stats });
 // The old single-page version kept the exercise in ear.mode; it now decides which sub-page opens first
 if (!state.sub.ear && se.mode === 'ch') state.sub.ear = 'chords';
+const EAR_TIMER = makeTimer({
+  prefix: 'ear', page: 'ear', key: () => E.mode === 'iv' ? 'interval' : 'chord',
+  waiting: () => !!E.q && !E.answered, timeUp: earTimeUp, next: newQuestion
+});
 const earItems = () => E.mode === 'iv' ? EAR_IV.filter(x => E.iv.has(x.code)) : EAR_CH.filter(x => E.ch.has(x.id));
 const keyOf = it => (E.mode === 'iv' ? 'iv:' : 'ch:') + (it.code || it.id);
 
@@ -63,20 +67,35 @@ function newQuestion() {
   const dir = E.mode === 'iv' ? (E.dir === 'mixed' ? ['up', 'down', 'harmonic'][Math.floor(Math.random() * 3)] : E.dir) : 'up';
   const root = E.mode === 'iv' ? 48 + Math.floor(Math.random() * 12) : 48 + Math.floor(Math.random() * 10);
   E.q = { it, root, dir }; E.answered = false; E.last = keyOf(it);
+  EAR_TIMER.start();
   playItem(it, root, dir);
   renderEar();
+}
+// Counts an answer: the statistics of the item, the score, the streak and the saved attempt
+function scoreEar(ok, answer) {
+  const k = keyOf(E.q.it);
+  E.answered = true;
+  E.stats[k] = E.stats[k] || { r: 0, t: 0 };
+  E.stats[k].t++; if (ok) E.stats[k].r++;
+  E.total++; if (ok) { E.right++; E.streak++; } else E.streak = 0;
+  logAttempt(E.mode === 'iv' ? 'interval' : 'chord', E.q.it.name, answer, ok);
+  E.q.ok = ok;
+  save();
 }
 function answerEar(it) {
   if (!E.q) return;
   if (E.answered) { playItem(it, E.q.root, E.q.dir); return; }
-  E.answered = true;
-  const ok = keyOf(it) === keyOf(E.q.it), k = keyOf(E.q.it);
-  E.stats[k] = E.stats[k] || { r: 0, t: 0 };
-  E.stats[k].t++; if (ok) E.stats[k].r++;
-  E.total++; if (ok) { E.right++; E.streak++; } else E.streak = 0;
-  logAttempt(E.mode === 'iv' ? 'interval' : 'chord', E.q.it.name, it.name, ok);
-  E.q.chosen = it; E.q.ok = ok;
-  save();
+  E.q.chosen = it;
+  scoreEar(keyOf(it) === keyOf(E.q.it), it.name);
+  EAR_TIMER.answered(E.q.ok);
+  renderEar();
+}
+// No answer in time: wrong, and the question is played again so the right answer can be heard
+function earTimeUp() {
+  if (!E.q || E.answered) return;
+  E.q.chosen = null; E.q.late = true;
+  scoreEar(false, 'Time ran out');
+  playItem(E.q.it, E.q.root, E.q.dir);
   renderEar();
 }
 function describe(q) {
@@ -104,17 +123,18 @@ function renderEar(sub = current.sub) {
 
   const list = earItems();
   if (E.q && !list.some(x => keyOf(x) === keyOf(E.q.it))) E.q = null;
+  if (!E.q) EAR_TIMER.cancel();
   $('replay').disabled = !E.q;
   $('prompt').textContent = list.length < 2 ? 'Choose at least two options in the selection.'
     : !E.q ? 'Press “New question” to start.'
     : E.answered ? 'Press “New question” to continue.'
     : E.mode === 'iv' ? 'Which interval did you hear?' : 'Which chord quality did you hear?';
   $('feedback').innerHTML = E.q && E.answered
-    ? `<span class="verdict ${E.q.ok ? 'good' : 'bad'}">${E.q.ok ? 'Correct' : 'Not quite. You answered ' + E.q.chosen.name.toLowerCase()}</span><span class="sub">${describe(E.q)}</span>`
+    ? `<span class="verdict ${E.q.ok ? 'good' : 'bad'}">${E.q.ok ? 'Correct' : E.q.late ? 'Time is up. It was ' + E.q.it.name.toLowerCase() : 'Not quite. You answered ' + E.q.chosen.name.toLowerCase()}</span><span class="sub">${describe(E.q)}</span>`
     : '';
   $('answers').innerHTML = list.map(it => {
     let cls = '';
-    if (E.q && E.answered) { if (keyOf(it) === keyOf(E.q.it)) cls = 'correct'; else if (keyOf(it) === keyOf(E.q.chosen)) cls = 'wrong'; }
+    if (E.q && E.answered) { if (keyOf(it) === keyOf(E.q.it)) cls = 'correct'; else if (E.q.chosen && keyOf(it) === keyOf(E.q.chosen)) cls = 'wrong'; }
     const sub2 = E.mode === 'iv' ? `${it.code === '#4' ? 'A4 / d5' : intervalName(it.code)}, ${it.semi} semitones` : `X${it.sym || ''}`.replace(/^X$/, 'X (major)');
     return `<button class="${cls}" data-a="${it.code || it.id}"><span>${it.name}</span><small>${sub2}</small></button>`;
   }).join('');
@@ -125,6 +145,7 @@ function renderEar(sub = current.sub) {
     return `<div class="stat-row"><span>${it.name}</span><span class="bar"><i style="width:${(p * 100).toFixed(0)}%"></i></span><span class="n">${st.t ? st.r + '/' + st.t : 'not practised'}</span></div>`;
   }).join('');
   $('resetStats').textContent = E.confirmReset ? 'Click again to delete' : 'Reset statistics';
+  EAR_TIMER.render();
 }
 
 PAGES.ear = {
@@ -143,6 +164,7 @@ PAGES.ear = {
       save(); renderEar();
     });
     $('newQ').addEventListener('click', newQuestion);
+    EAR_TIMER.bind();
     $('replay').addEventListener('click', () => { if (E.q) playItem(E.q.it, E.q.root, E.q.dir); });
     onButton($('answers'), b => { const it = earItems().find(x => (x.code || x.id) === b.dataset.a); if (it) answerEar(it); });
     $('resetStats').addEventListener('click', () => {
