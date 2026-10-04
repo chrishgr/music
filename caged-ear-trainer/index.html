@@ -97,11 +97,24 @@
         <select id="scaleSel"></select>
       </div>
       <div class="field" data-mode="piano">
-        <span class="lbl" id="lbl-scoct">Play</span>
+        <span class="lbl" id="lbl-scoct">Octaves</span>
         <div class="seg" id="scOct" role="group" aria-labelledby="lbl-scoct">
-          <button data-v="1">One octave</button><button data-v="2">Two octaves</button>
+          <button data-v="1">One</button><button data-v="2">Two</button>
         </div>
       </div>
+      <div class="field" data-mode="piano">
+        <span class="lbl" id="lbl-scdir">Direction</span>
+        <div class="seg" id="scDir" role="group" aria-labelledby="lbl-scdir">
+          <button data-v="updown">Up and down</button><button data-v="up">Up</button><button data-v="down">Down</button>
+        </div>
+      </div>
+      <div class="field" data-mode="piano">
+        <span class="lbl" id="lbl-schand">Hand</span>
+        <div class="seg" id="scHand" role="group" aria-labelledby="lbl-schand">
+          <button data-v="right">Right</button><button data-v="left">Left</button><button data-v="both">Both</button>
+        </div>
+      </div>
+      <label class="check" data-mode="piano"><input type="checkbox" id="scFingers"> <span>Show fingering</span></label>
       <div class="field" data-mode="guitar">
         <label class="lbl" for="scalePos">Neck area</label>
         <div class="posbar">
@@ -125,6 +138,10 @@
         <button class="primary" id="scPlay">Play the scale</button>
         <button class="ghost" data-stop>Stop</button>
       </div>
+    </div>
+    <div class="staff-box" data-mode="piano">
+      <div class="scroll staff-wrap" id="scStaff"></div>
+      <p class="hint" id="scStaffInfo"></p>
     </div>
     <div class="legend" id="scLegend" aria-hidden="true"></div>
     <div class="inst-slot" data-slot="main">

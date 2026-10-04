@@ -401,7 +401,7 @@ function capoSuggestions(prog, keyPc, maxCapo = 9) {
    the root at the bottom, and each inversion moves the lowest note up an octave: the 1st inversion has the
    third at the bottom, the 2nd the fifth and, in a seventh chord, the 3rd the seventh. The ninth of an add9
    chord is never the lowest note; in close position it sits next to the root, as a second. */
-const PIANO_LO = 36, PIANO_HI = 83;   // the keyboard drawn on the pages, C2 to B5
+const PIANO_LO = 36, PIANO_HI = 83;   // the keyboard drawn on the pages, C2 to B5 (the Scales page in piano mode draws up to B6)
 const PIANO_CENTER = 62;               // one-hand voicings sit as close to middle C as they can
 const INVERSION_NAMES = ['Root position', '1st inversion', '2nd inversion', '3rd inversion'];
 const meanOf = ms => ms.reduce((a, m) => a + m, 0) / ms.length;
@@ -441,13 +441,101 @@ function pianoVoicings(rootPc, ivs) {
   out.push({ id: 'hands', name: 'Two hands', bassIv: '1', left, right, notes: [...left, ...right] });
   return out;
 }
-// A scale as rising notes from the root over one or two octaves, ending on the root. One octave starts as
-// near middle C as it can (G3 to F#4); two octaves start in the octave below, so both fit on the keyboard.
-function pianoScale(rootPc, ivs, octaves = 1) {
-  const start = octaves === 2 ? 48 + rootPc : (rootPc <= 6 ? 60 : 48) + rootPc, out = [];
-  for (let o = 0; o < octaves; o++) ivs.forEach(iv => out.push(start + 12 * o + IV[iv][0]));
-  out.push(start + 12 * octaves);
+/* --- Scales on the piano: spelling, the octave they are written in, fingering and key signature --- */
+// The root a scale is spelled from: minor-type scales (with a minor third) as in the minor keys (C#, G#, Eb, Bb),
+// the others as in the major keys (Db, Ab, F#), so no scale needs more than seven sharps or flats
+const scaleRootName = (pc, ivs) => (ivs.includes('b3') ? MINOR_ROOTS : ROOTS)[((pc % 12) + 12) % 12];
+const isBlackPc = pc => [1, 3, 6, 8, 10].includes(((pc % 12) + 12) % 12);
+// The written octave each hand starts in, by the letter of the root (C D E F G A B). Chosen so the notes need as few
+// ledger lines as can be (at most four), the right hand in the treble clef and the left hand in the bass clef,
+// and so both hands fit on a 61-key keyboard (C2 to C7).
+const SCALE_START = {
+  right: { 1: [4, 4, 4, 4, 4, 4, 4], 2: [4, 4, 3, 3, 3, 3, 3] },
+  left: { 1: [3, 3, 3, 2, 2, 2, 2], 2: [2, 2, 2, 2, 2, 2, 2] }
+};
+/* Scale fingering, from the rules taught for piano scales: the thumb plays white keys only; the fingers go in
+   groups that each start (right hand going up) or end (left hand going up) with the thumb, 1 2 3 and 1 2 3 4
+   for seven-note scales, so the 4th finger comes once an octave and the same fingering repeats every octave;
+   the 4th finger goes on a black key where there is one. When the root is a white key the thumb takes the root,
+   and the group of three comes first, going up in the right hand and down in the left. Pentatonic scales use
+   groups of three and two, six-note scales groups of two to four. The result is one finger per scale degree. */
+function cyclicFingering(pcs, hand) {
+  const N = pcs.length, sizes = [2, 3, 4], seen = new Set(), cands = [];
+  for (const a of sizes) {
+    const b = N - a;
+    if (!sizes.includes(b)) continue;
+    for (let s = 0; s < N; s++) {
+      const f = new Array(N);
+      for (let k = 0; k < a; k++) f[(s + k) % N] = hand === 'right' ? k + 1 : a - k;
+      for (let k = 0; k < b; k++) f[(s + a + k) % N] = hand === 'right' ? k + 1 : b - k;
+      const key = f.join('');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      // the group next to the root, in the direction the hand plays away from it
+      let first = 0;
+      if (hand === 'right') for (let k = 0; k < N && (k === 0 || f[k] !== 1); k++) first++;
+      else for (let k = 0; k < N && (k === 0 || f[(N - k) % N] !== 1); k++) first++;
+      cands.push({ f, first });
+    }
+  }
+  const rank = c => [
+    c.f.filter((x, i) => x === 1 && isBlackPc(pcs[i])).length,             // thumbs on black keys
+    !isBlackPc(pcs[0]) && c.f[0] !== 1 ? 1 : 0,                             // a white root not on the thumb
+    -c.f.filter((x, i) => x === 4 && isBlackPc(pcs[i])).length,           // 4th fingers on black keys
+    [3, 4, 2].indexOf(c.first)                                              // the group of three first
+  ];
+  const cmp = (x, y) => { const p = rank(x), q = rank(y); for (let i = 0; i < p.length; i++) if (p[i] !== q[i]) return p[i] - q[i]; return 0; };
+  return cands.sort(cmp)[0].f;
+}
+// A scale for one hand on the piano, low to high over one or two octaves, ending on the root: each note with its
+// MIDI number, its spelling, the line or space it is written on (letter 0-6 from C, written octave) and its finger.
+// The first and last notes take the finger that fits the end of the hand: the right hand ends on 5 (or 4) after
+// its last group, and the left hand starts on 5 (or 4) before its first; a right hand whose first note would
+// be the 4th finger starts on 2 instead, as the books write B♭ major.
+function pianoScaleRun(root, ivs, { hand = 'right', octaves = 1 } = {}) {
+  const r = parseNote(root), oct0 = SCALE_START[hand][octaves][r.L];
+  const pcs = ivs.map(iv => (r.pc + IV[iv][0]) % 12), cyc = cyclicFingering(pcs, hand), out = [];
+  for (let o = 0; o <= octaves; o++) ivs.forEach((iv, k) => {
+    if (o === octaves && k > 0) return;
+    const raw = spellRaw(root, iv), p = parseNote(raw), [semi, deg] = IV[iv];
+    const octave = oct0 + o + Math.floor((r.L + deg - 1) / 7);
+    out.push({ m: 12 * (oct0 + o + 1) + NATURAL[r.L] + r.acc + semi, raw, letter: p.L, acc: p.acc, octave, degree: k, finger: cyc[k] });
+  });
+  const n = out.length;
+  if (hand === 'right') {
+    if (out[n - 1].finger === 1) out[n - 1].finger = Math.min(5, out[n - 2].finger + 1);
+    if (out[0].finger === 4 && out[1].finger === 1) out[0].finger = 2;
+  } else if (out[0].finger === 1) out[0].finger = Math.min(5, out[1].finger + 1);
   return out;
+}
+// The key signature a scale is written with: its own sharps or flats for the major and natural minor scales and
+// the modes, and for the others those of the key they belong to (harmonic minor, minor pentatonic and blues in
+// the natural minor key, major pentatonic in the major key), so the raised 7th and the blue note are written as
+// accidentals. { acc: 1 for sharps, -1 for flats, 0 for none, letters: in the order they are written }, or null
+// when the key would need double sharps or flats.
+const KEY_OF_SCALE = { harmminor: 'minor', majpenta: 'major', minpenta: 'minor', blues: 'minor' };
+function keySignature(root, scaleId) {
+  const ref = SCALES.find(x => x.id === (KEY_OF_SCALE[scaleId] || scaleId));
+  const notes = ref.iv.map(iv => parseNote(spellRaw(root, iv)));
+  if (notes.some(p => Math.abs(p.acc) > 1)) return null;
+  const sharp = notes.filter(p => p.acc === 1).map(p => LETTERS[p.L]), flat = notes.filter(p => p.acc === -1).map(p => LETTERS[p.L]);
+  if (sharp.length && flat.length) return null;
+  const letters = sharp.length ? sharp : flat, order = (sharp.length ? 'FCGDAEB' : 'BEADGCF').slice(0, letters.length).split('');
+  if (!order.every(l => letters.includes(l))) return null;
+  return { acc: sharp.length ? 1 : flat.length ? -1 : 0, letters: order };
+}
+// The accidental to print before each note (1 sharp, -1 flat, 0 natural, 2 or -2 double), or null for none.
+// One is printed when a note differs from the key signature, or from the last note on the same line or space
+// in the same bar. bar: the index of the bar each note is in.
+function writtenAccidentals(notes, sig, bar = notes.map(() => 0)) {
+  let now = new Map(), cur = -1;
+  return notes.map((x, i) => {
+    if (bar[i] !== cur) { now = new Map(); cur = bar[i]; }
+    const key = x.letter + ':' + x.octave;
+    const before = now.has(key) ? now.get(key) : sig && sig.letters.includes(LETTERS[x.letter]) ? sig.acc : 0;
+    now.set(key, x.acc);
+    return x.acc === before ? null : x.acc;
+  });
 }
 // How far the notes of one chord are from the next: every note to the nearest note of the other chord, both ways.
 // Notes the two chords share cost nothing, and a note that moves a step costs one or two.
