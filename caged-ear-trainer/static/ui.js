@@ -15,7 +15,7 @@ const saved = load();
 const DEFAULTS = {
   page: 'home', sub: {},
   root: 'A', labels: 'name', inst: 'piano', soundV: 2, mainInst: 'guitar', notation: 'intl',
-  scale: 'minpenta', scalePos: 'all', scaleKind: 'triads', scaleOct: 1, pianoVoicing: 'root',
+  scale: 'minpenta', scalePos: 'all', scaleKind: 'triads', scaleOct: 1, scaleDir: 'updown', scaleHand: 'right', scaleFingers: true, pianoVoicing: 'root',
   chord: 'maj', chordShape: 'E', chordAll: true,
   cagedQ: 'maj', shape: 'all', cagedScale: '', cagedCompare: true,
   cpType: 'play', cpQ: ['maj', 'min', '7'], cpShapes: [...SHAPE_ORDER],
@@ -34,6 +34,8 @@ if (!['guitar', 'piano'].includes(state.inst)) state.inst = DEFAULTS.inst;
 // almost always the old default, guitar, so it is reset to piano once; it can be changed back at the top.
 if (saved.soundV !== DEFAULTS.soundV) { state.inst = DEFAULTS.inst; state.soundV = DEFAULTS.soundV; }
 if (![1, 2].includes(state.scaleOct)) state.scaleOct = DEFAULTS.scaleOct;
+if (!['updown', 'up', 'down'].includes(state.scaleDir)) state.scaleDir = DEFAULTS.scaleDir;
+if (!['right', 'left', 'both'].includes(state.scaleHand)) state.scaleHand = DEFAULTS.scaleHand;
 if (!CHORDS.some(c => c.id === state.chord)) state.chord = DEFAULTS.chord;
 if (!CAGED_QUALITIES.includes(state.cagedQ)) state.cagedQ = DEFAULTS.cagedQ;
 if (!SCALES.some(s => s.id === state.scale)) state.scale = DEFAULTS.scale;
@@ -306,13 +308,14 @@ function renderNeck(svg, m = {}) {
 /* ================= DRAWING: PIANO ================= */
 // Four octaves, C2 to B5, which covers every note of a guitar with 15 frets (E2 to G5)
 const KEY_LO = 36, KEY_OCTAVES = 4;
-// marks: byMidi marks exact notes (a grip as it sounds), byPc marks a pitch class in every octave (a scale)
-function renderKeys(svg, { byPc = null, byMidi = null } = {}) {
+// marks: byMidi marks exact notes (a grip as it sounds), byPc marks a pitch class in every octave (a scale).
+// octaves: how many octaves from C2 (the Scales page in piano mode draws five, C2 to B6, for two-octave scales).
+function renderKeys(svg, { byPc = null, byMidi = null, octaves = KEY_OCTAVES } = {}) {
   const W = 24, H = 104, BW = 15, BH = 64;
   const whites = [0, 2, 4, 5, 7, 9, 11], blacks = { 1: 0, 3: 1, 6: 3, 8: 4, 10: 5 };
   const mark = m => (byMidi && byMidi.get(m)) || (byPc && byPc.get(m % 12)) || null;   // byPc marks what byMidi leaves
   let w = '', b = '';
-  for (let o = 0; o < KEY_OCTAVES; o++) {
+  for (let o = 0; o < octaves; o++) {
     whites.forEach((pc, i) => {
       const x = (o * 7 + i) * W + 1, m = KEY_LO + o * 12 + pc;
       w += `<rect class="k-white" data-m="${m}" x="${x}" y="1" width="${W}" height="${H}" rx="3"><title>${noteName(ROOTS[pc])}${Math.floor(m / 12) - 1}</title></rect>`;
@@ -327,7 +330,7 @@ function renderKeys(svg, { byPc = null, byMidi = null } = {}) {
       if (t) b += dotSvg(x + BW / 2, BH - 11, t, t.cls || t.role, 7);
     }
   }
-  svg.setAttribute('viewBox', `0 0 ${7 * KEY_OCTAVES * W + 2} ${H + 2}`);
+  svg.setAttribute('viewBox', `0 0 ${7 * octaves * W + 2} ${H + 2}`);
   svg.innerHTML = w + b;
 }
 // The notes of a piano voicing, for renderKeys
@@ -399,6 +402,87 @@ function chordBoxButton(p, tones, { i, title, sub, pressed = false, playing = fa
   return `<button class="box${playing ? ' playing' : ''}" data-i="${i}" aria-pressed="${pressed}">${chordBoxSvg(p, tones, anchors)}<b>${title}</b><small>${sub}</small></button>`;
 }
 const fretRange = p => p.lo === p.hi ? `fret ${p.lo}` : `frets ${p.lo}–${p.hi}`;
+
+/* ================= DRAWING: NOTATION =================
+   A scale on a grand staff: the right hand in the treble clef and the left hand in the bass clef, each with its
+   key signature, whole notes going up and/or down with a bar line where the direction turns, ledger lines for
+   notes outside the staff, and the fingering above the right hand and below the left. A note sits on the line
+   or space of its letter and written octave (from pianoScaleRun), so C♭ and B♯ are written where they belong. */
+const STAFF = {
+  treble: { bottom: 30, sharps: [38, 35, 39, 36, 33, 37, 34], flats: [34, 37, 33, 36, 32, 35, 31] },   // E4 is the bottom line
+  bass: { bottom: 18, sharps: [24, 21, 25, 22, 19, 23, 20], flats: [20, 23, 19, 22, 18, 21, 17] }       // G2 is the bottom line
+};
+// Sharps, flats and naturals drawn as shapes (not font glyphs, which many fonts lack), centred on the line or space
+function accidentalSvg(acc, x, y) {
+  const flat = dx => `<path class="st-acc-line" d="M${x + dx - 2.6},${y - 12} V${y + 4.5} C${x + dx + 4},${y + 1.5} ${x + dx + 4.6},${y - 4.5} ${x + dx + 0.6},${y - 3.6} C${x + dx - 1},${y - 3.2} ${x + dx - 2.6},${y - 1.4} ${x + dx - 2.6},${y}"/>`;
+  if (acc === -1) return flat(0);
+  if (acc === -2) return flat(-3.5) + flat(3);
+  if (acc === 2) return `<path class="st-acc-line thick" d="M${x - 3},${y - 3} L${x + 3},${y + 3} M${x + 3},${y - 3} L${x - 3},${y + 3}"/>`;
+  const bars = `<path class="st-acc-fill" d="M${x - 4.4},${y - 1.6} L${x + 4.4},${y - 4.2} V${y - 2} L${x - 4.4},${y + 0.6} Z M${x - 4.4},${y + 4.2} L${x + 4.4},${y + 1.6} V${y + 3.8} L${x - 4.4},${y + 6.4} Z"/>`;
+  if (acc === 1) return `<path class="st-acc-line" d="M${x - 1.7},${y - 8.5} V${y + 10} M${x + 1.7},${y - 10} V${y + 8.5}"/>` + bars;
+  return `<path class="st-acc-line" d="M${x - 2.2},${y - 9.5} V${y + 4.5} M${x + 2.2},${y - 4.5} V${y + 9.5}"/>` +   // natural
+    `<path class="st-acc-fill" d="M${x - 2.2},${y - 2.6} L${x + 2.2},${y - 4} V${y - 1.8} L${x - 2.2},${y - 0.4} Z M${x - 2.2},${y + 3.2} L${x + 2.2},${y + 1.8} V${y + 4} L${x - 2.2},${y + 5.4} Z"/>`;
+}
+const lineOf = n => n.octave * 7 + n.letter;   // C4 = 28, one step for each line and space
+// G clef around the G line (y 30) and F clef around the F line (y 10), for a staff whose top line is y 0
+const TREBLE_CLEF = 'M15.5,30 C12,30.5 10.5,26 14,24.3 C18.5,22.3 22.5,26.5 21.2,31.5 C19.8,37.5 12.5,39.5 8.6,35.6 C4.2,31.2 5.8,23.8 11.5,18.7 C16.5,14.2 21.3,9.5 21.2,1.5 C21.1,-6 16.8,-10.5 14.2,-6.2 C12,-2.5 12.6,8 14.8,22 L18.2,45.5 C18.9,50.6 15.5,53.8 12.2,52.4';
+const BASS_CLEF = 'M5.5,11 C5.5,4 11.5,0.8 16.5,2.6 C22.8,4.9 23.2,15 17.5,22.5 C13.8,27.5 9,31 3.5,33.5';
+// parts: { right: [notes], left: [notes] } in the order played; bars: the bar of each note; sig: keySignature();
+// fingers: whether to write the fingering. Returns the SVG and its width.
+function scaleStaffSvg(parts, { sig = null, bars, fingers = true, hands = ['right', 'left'] } = {}) {
+  const n = parts.right.length, X0 = 10, clefW = 36, accW = 10;
+  const sigN = sig ? sig.letters.length : 0, startX = X0 + clefW + sigN * accW + 26;
+  const acc = { right: writtenAccidentals(parts.right, sig, bars), left: writtenAccidentals(parts.left, sig, bars) };
+  // x for each note: a little more room before a note with an accidental, and after a bar line
+  const xs = [];
+  let x = startX;
+  for (let i = 0; i < n; i++) {
+    if (i && bars[i] !== bars[i - 1]) x += 16;
+    if (acc.right[i] !== null || acc.left[i] !== null) x += 10;
+    xs.push(x);
+    x += 28;
+  }
+  const W = x + 8;
+  // How high and low the notes go, so the staves get room for ledger lines and fingering
+  const ds = h => parts[h].map(lineOf), show = h => hands.includes(h);
+  const top = 26 + Math.max(0, Math.max(...ds('right')) - 38) * 5;
+  const rLow = top + 40 + Math.max(0, 30 - Math.min(...ds('right'))) * 5;
+  const lHigh = Math.max(0, Math.max(...ds('left')) - 26) * 5;
+  const bTop = Math.max(top + 40 + 44, rLow + 18 + lHigh);
+  const H = bTop + 40 + Math.max(0, 18 - Math.min(...ds('left'))) * 5 + 30;
+  const staves = { right: { y0: top, clef: STAFF.treble }, left: { y0: bTop, clef: STAFF.bass } };
+  let svg = `<line class="st-sys" x1="${X0}" x2="${X0}" y1="${top}" y2="${bTop + 40}"/>`;
+  for (const h of ['right', 'left']) {
+    const { y0, clef } = staves[h], yOf = d => y0 + 40 - (d - clef.bottom) * 5;
+    for (let k = 0; k < 5; k++) svg += `<line class="st-line" x1="${X0}" x2="${W - 2}" y1="${y0 + k * 10}" y2="${y0 + k * 10}"/>`;
+    svg += h === 'right'
+      ? `<g transform="translate(${X0 + 6} ${y0})"><path class="st-clef" d="${TREBLE_CLEF}"/><circle class="st-ink" cx="12.4" cy="50.2" r="2.6"/></g>`
+      : `<g transform="translate(${X0 + 6} ${y0})"><path class="st-clef" d="${BASS_CLEF}"/><circle class="st-ink" cx="7.2" cy="10" r="3.6"/><circle class="st-ink" cx="26" cy="5" r="1.8"/><circle class="st-ink" cx="26" cy="15" r="1.8"/></g>`;
+    if (sig) sig.letters.forEach((l, k) => {
+      const d = (sig.acc > 0 ? clef.sharps : clef.flats)[k];
+      svg += accidentalSvg(sig.acc, X0 + clefW + 8 + k * accW, yOf(d));
+    });
+    // bar lines where the direction turns, and a double bar at the end
+    for (let i = 1; i < n; i++) if (bars[i] !== bars[i - 1]) svg += `<line class="st-bar" x1="${xs[i - 1] + 22}" x2="${xs[i - 1] + 22}" y1="${y0}" y2="${y0 + 40}"/>`;
+    svg += `<line class="st-bar" x1="${W - 7}" x2="${W - 7}" y1="${y0}" y2="${y0 + 40}"/><line class="st-bar end" x1="${W - 3}" x2="${W - 3}" y1="${y0}" y2="${y0 + 40}"/>`;
+    parts[h].forEach((note, i) => {
+      const d = lineOf(note), y = yOf(d), cx = xs[i];
+      let g = '';
+      for (let L = clef.bottom - 2; L >= d; L -= 2) g += `<line class="st-ledger" x1="${cx - 10}" x2="${cx + 10}" y1="${yOf(L)}" y2="${yOf(L)}"/>`;
+      for (let L = clef.bottom + 10; L <= d; L += 2) g += `<line class="st-ledger" x1="${cx - 10}" x2="${cx + 10}" y1="${yOf(L)}" y2="${yOf(L)}"/>`;
+      if (acc[h][i] !== null) g += accidentalSvg(acc[h][i], cx - 16, y);
+      g += `<rect class="st-hit" x="${cx - 12}" y="${y - 10}" width="24" height="20"/>` +
+        `<ellipse class="st-note" cx="${cx}" cy="${y}" rx="6.6" ry="4.6" transform="rotate(-18 ${cx} ${y})"/>` +
+        `<ellipse class="st-hole" cx="${cx}" cy="${y}" rx="3.5" ry="2.4" transform="rotate(48 ${cx} ${y})"/>`;
+      if (fingers) {
+        const fy = h === 'right' ? Math.min(y0 - 7, y - 11) : Math.max(y0 + 52, y + 19);
+        g += `<text class="st-finger" x="${cx}" y="${fy}" text-anchor="middle">${note.finger}</text>`;
+      }
+      svg += `<g class="st-n${show(h) ? '' : ' off'}" data-i="${i}" data-h="${h}" data-m="${note.m}">${g}</g>`;
+    });
+  }
+  return { svg: `<svg class="staff" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img">${svg}</svg>`, width: W };
+}
 
 /* ================= SHARED CONTROLS ================= */
 const LEGEND_TXT = { root: 'Root', third: 'Third', fifth: 'Fifth', seventh: 'Seventh', other: 'Other notes', ghost: 'Note in the major shape', anchor: 'Anchor finger, stays put' };

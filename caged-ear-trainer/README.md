@@ -10,7 +10,7 @@ note on the piano, and a click on a piano key shows every place on the neck with
 | Page | What it does |
 | --- | --- |
 | **Home** | The choice of main instrument (guitar or piano), one card per page, and how the pages fit together |
-| **Scales** | Ten scales and modes on the whole neck or one five-fret position at a time. Play runs root to root through the position. *Chords in this scale* builds the triads or seventh chords on each degree, with Roman numerals; click one to hear it and see it inside the scale. In piano mode Play runs the scale up and back down the keyboard over one or two octaves, and the neck areas are hidden |
+| **Scales** | Ten scales and modes on the whole neck or one five-fret position at a time. Play runs root to root through the position. *Chords in this scale* builds the triads or seventh chords on each degree, with Roman numerals; click one to hear it and see it inside the scale. In piano mode the scale is written out on a grand staff, right hand in the treble clef and left hand in the bass clef, with its key signature, accidentals and the fingering for both hands; Play runs it up, down or up and back down, over one or two octaves, with the right, the left or both hands, and the note that sounds lights up on the keys and in the notation. The neck areas are hidden then. Minor-type scales are spelled as their minor key (C♯ minor, not D♭ minor) |
 | **Chords** | Fourteen chord types with movable grips shown as chord diagrams. The chosen grip is what the neck, the piano and the Play buttons use. Links to the CAGED shapes and to the scales that contain the chord. In piano mode the diagrams are piano voicings instead: root position, every inversion in close position near middle C, and two hands with the root in octaves in the left hand. The chosen voicing is what the piano, the text and the Play buttons use |
 | **CAGED** | The five CAGED shapes for **major, minor, 7, m7 and maj7**, in neck order. *Compare with the major shape* marks which notes moved and lists the changes. A scale can be shown around the shape. *Play all five up the neck* lights each shape as it sounds. *Practice*: play a named shape on the neck, or name a shape that is shown |
 | **Triads** | Triads from any open chord with a capo (0 to 12) on any string set, in root position and both inversions. *Practice*: play a named triad or recognise one |
@@ -30,7 +30,8 @@ of turning guitar grips into keys:
   in the octave nearest middle C, and two hands with the root in octaves in the left hand.
 - Progressions voices each chord with the bass in the left hand and, in the right hand, the inversion nearest
   the chord before, so the notes two chords share stay where they are and the others move a step or two.
-- Scales plays up and back down the keyboard over one or two octaves.
+- Scales writes the scale out on a grand staff with the key signature and the fingering for both hands, shows
+  the fingers on the keys, and plays it up, down or both ways, over one or two octaves, with either or both hands.
 - The guitar neck further down still shows the guitar version, but it does not decide what the piano plays.
 - CAGED and Triads are about the guitar, so they are hidden: they leave the menu and the Home page, links to
   them disappear, and their addresses lead to Home.
@@ -172,7 +173,7 @@ Profiles have no passwords. This is meant for one computer or a home network, no
 
 ```bash
 pytest -q                 # backend and statistics: 50 tests
-node verify_notes.mjs     # theory, shapes, piano voicings, progressions, rhythm, sound and pitch detection: 9306 checks, about 20 seconds
+node verify_notes.mjs     # theory, shapes, piano voicings, progressions, rhythm, sound and pitch detection: 9343 checks, about 20 seconds
 ```
 
 `verify_notes.mjs` loads `static/theory.js`, the same file the page uses, and checks it against
@@ -215,6 +216,13 @@ hand-written expected answers:
     I–IV–V–I in C leads to C E G, C F A, B D G and back with C F G C in the bass, and the falling bass line
     walks C B A G F E D; in every progression and key the notes two chords share stay in place and no voice
     moves more than a major third
+23. Piano scales: the fingering of all twelve major and harmonic minor scales for both hands is the one in the
+    scale books (C major 1231234 5 and 5432132 1, B♭ major 2123123 4 and 3214321 3, F♯ major 2341231 2 and
+    4321321 4 ...), two octaves repeat the pattern, C major pentatonic is 123123 and 321321 and the C blues
+    scale 1234123; in every scale, key, hand and octave count the thumb stays on white keys where the keys allow,
+    each change is the next finger or a thumb crossing, and 5 only ends a hand; every scale in every key has a
+    key signature of at most seven sharps or flats, and the accidentals are those a copyist would write (G♯ in
+    A harmonic minor in both bars, G♭ then G♮ in the C blues scale, F𝄪 in G♯ harmonic minor)
 
 Random noise uses a fixed seed, so every run gives the same result.
 
@@ -240,9 +248,14 @@ app also runs when `index.html` is opened directly from disk.
 - Each page with both instruments marks two places, `data-slot="main"` and `data-slot="second"`.
   `placeInstruments()` in `ui.js` moves the neck and the piano (`.inst-block`) into them for the main
   instrument before every redraw, so the code that draws them does not change.
+- The scales on the piano come from `pianoScaleRun()` in `theory.js`: each note with its MIDI number, its spelling,
+  the line or space it is written on and its finger, from `cyclicFingering()` (the scale-fingering rules: thumb on
+  white keys, groups of 1 2 3 and 1 2 3 4, the 4th finger on a black key, the thumb on a white root).
+  `keySignature()` and `writtenAccidentals()` decide what is written, and `scaleStaffSvg()` in `ui.js` draws the
+  grand staff, with clefs and accidentals drawn as shapes so they look the same in every browser.
 - Piano mode (`pianoMode()` in `ui.js`) sets the class `piano-mode` on the body; anything marked
   `data-mode="guitar"` or `data-mode="piano"` shows only in that mode. The voicings come from
-  `pianoVoicings()`, `pianoScale()` and `voiceLeadProgression()` in `theory.js`, and `playPiano()` plays a list
+  `pianoVoicings()`, `pianoScaleRun()` and `voiceLeadProgression()` in `theory.js`, and `playPiano()` plays a list
   of notes together or broken with the piano sound, lighting up only the piano.
 - `makeTimer()` is the task timer shared by every exercise. A page tells it which task is waiting for an
   answer, what to do when the time runs out and how to make the next task; the timer counts down, counts
@@ -300,4 +313,16 @@ The expected answers in `verify_notes.mjs` follow these references:
   [Hear and Play, voice leading for triads](https://hearandplay.com/main/voice-leading-principles-for-triads-less-hand-movement-more-harmony/);
   keep the common tone and move the other voices by step, [G Major Music Theory, common tone and nearest motion](https://www.gmajormusictheory.org/Fundamentals/Ch15.pdf)
 - Scales played up and down over one or two octaves, as in graded piano exams: [ABRSM piano syllabus](https://www.abrsm.org/sites/default/files/2024-06/Piano%202025%20&%202026%20Prac%20syllabus%2020240524_access.pdf)
+- Scale fingering rules (thumb only on white keys, the 4th finger on a black key and once an octave, groups of 1 2 3
+  and 1 2 3 4 that repeat every octave): [Practising the Piano, the principles of scale fingering](https://practisingthepiano.com/principles-scale-fingerings/),
+  [Robert Kelley, scale fingering chart](https://robertkelleyphd.com/home/teaching/keyboard/keyboard-scale-fingering-chart/),
+  [Piano Scales, fingerings](https://www.pianoscales.org/fingerings.html)
+- Fingerings of the major and harmonic minor scales: [Piano Keyboard Guide, A♭ major](https://www.piano-keyboard-guide.com/a-flat-major-scale.html),
+  [B♭ major](https://www.piano-keyboard-guide.com/b-flat-major-scale.html), [E♭ major](https://www.piano-keyboard-guide.com/e-flat-major-scale.html),
+  [F♯ major](https://www.piano-keyboard-guide.com/f-sharp-major-scale.html), [B major](https://www.piano-keyboard-guide.com/b-major-scale.html),
+  [Piano Scales, major](https://www.pianoscales.org/major.html) and [harmonic minor](https://www.pianoscales.org/minor-harmonic.html),
+  [Piano.org, B♭ harmonic minor](https://piano.org/scales/minor/harmonic/b-flat/); F♯ harmonic minor is written
+  3 4 1 2 3 1 2 3 here, so every octave is fingered the same; some charts start the single octave with 2 3
+- Pentatonic and blues fingering: [Piano.org, C major pentatonic](https://piano.org/scales/pentatonic/major/c/),
+  [LadyDpiano, fingering for the blues scale](https://ladydpiano.blogspot.com/2017/06/recommended-fingering-for-blues-scale.html)
 - YIN pitch detection: de Cheveigné and Kawahara (2002), [YIN, a fundamental frequency estimator for speech and music](http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf)
