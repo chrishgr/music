@@ -22,7 +22,8 @@ const T = new Function(`
            PROGRESSIONS, progressionChords, progressionBars, capoSuggestions, openGrip, keyName,
            beatClicks, trainerBpm, isSilentBar, ladderStep, tapTempo, spiderNotes, synthClick,
            GENRES, rotateProgression, familyCapo, progressionAnchors, parseGrip,
-           pianoVoicings, pianoScale, voiceLeadProgression, voiceDistance, PIANO_LO, PIANO_HI, pitchName, tonesOf };
+           pianoVoicings, pianoScaleRun, scaleRootName, keySignature, writtenAccidentals, voiceLeadProgression,
+           voiceDistance, PIANO_LO, PIANO_HI, pitchName, tonesOf };
 `)();
 
 let passed = 0, failed = 0;
@@ -560,18 +561,70 @@ for (const c of T.CHORDS) for (let r = 0; r < 12; r++) {
 check('every chord type in all twelve keys: close position, the right notes, the named bass, on the keyboard near middle C', pianoBad, []);
 
 const scaleIvs = id => T.SCALES.find(x => x.id === id).iv;
-check('C major scale, one octave up from middle C', names(T.pianoScale(0, scaleIvs('major'), 1)), 'C4 D4 E4 F4 G4 A4 B4 C5');
-check('A minor pentatonic, one octave', names(T.pianoScale(9, scaleIvs('minpenta'), 1)), 'A3 C4 D4 E4 G4 A4');
-const b2 = T.pianoScale(11, scaleIvs('major'), 2);
-check('B major over two octaves runs B3 to B5', [MIDI(b2[0]), MIDI(b2[b2.length - 1]), b2.length], ['B3', 'B5', 15]);
-let scaleBad = [];
-for (const sc of T.SCALES) for (let r = 0; r < 12; r++) for (const oct of [1, 2]) {
-  const ms = T.pianoScale(r, sc.iv, oct);
-  if (ms.length !== sc.iv.length * oct + 1 || ms[0] % 12 !== r || ms[ms.length - 1] !== ms[0] + 12 * oct) scaleBad.push(`${sc.id} ${r} ${oct} root`);
-  if (ms.some((m, i) => i && m <= ms[i - 1])) scaleBad.push(`${sc.id} ${r} ${oct} not rising`);
-  if (ms[0] < T.PIANO_LO || ms[ms.length - 1] > T.PIANO_HI) scaleBad.push(`${sc.id} ${r} ${oct} off the keyboard`);
+const runOf = (root, id, opts) => T.pianoScaleRun(root, scaleIvs(id), opts);
+const written = run => run.map(x => plain(x.raw) + x.octave).join(' ');
+check('C major, right hand, one octave from middle C', written(runOf('C', 'major')), 'C4 D4 E4 F4 G4 A4 B4 C5');
+check('A minor pentatonic, right hand', written(runOf('A', 'minpenta')), 'A4 C5 D5 E5 G5 A5');
+const bTwo = runOf('B', 'major', { octaves: 2 });
+check('B major over two octaves runs B3 to B5', [written(bTwo).split(' ')[0], written(bTwo).split(' ').pop(), bTwo.length], ['B3', 'B5', 15]);
+const gsm = runOf('G#', 'harmminor');
+check('G# harmonic minor is written with F double sharp, on the F line, sounding G5', [plain(gsm[6].raw), gsm[6].octave, MIDI(gsm[6].m)], ['F##', 5, 'G5']);
+check('minor-type scales are spelled from the minor keys, others from the major keys', [T.scaleRootName(1, scaleIvs('minor')), T.scaleRootName(1, scaleIvs('major')), T.scaleRootName(8, scaleIvs('dorian')), T.scaleRootName(6, scaleIvs('lydian'))], ['C#', 'Db', 'G#', 'F#']);
+
+// Standard scale fingerings, one octave going up, as printed in scale books and on teaching sites
+// (thumb only on white keys, 1 2 3 and 1 2 3 4 in turn, the 4th finger on a black key, once an octave)
+const FINGERING = {
+  major: { C: ['12312345', '54321321'], G: ['12312345', '54321321'], D: ['12312345', '54321321'], A: ['12312345', '54321321'],
+    E: ['12312345', '54321321'], B: ['12312345', '43214321'], 'F#': ['23412312', '43213214'], Db: ['23123412', '32143213'],
+    Ab: ['34123123', '32143213'], Eb: ['31234123', '32143213'], Bb: ['21231234', '32143213'], F: ['12341234', '54321321'] },
+  harmminor: { A: ['12312345', '54321321'], E: ['12312345', '54321321'], B: ['12312345', '43214321'], 'F#': ['34123123', '43213214'],
+    'C#': ['34123123', '32143213'], 'G#': ['34123123', '32143213'], Eb: ['31234123', '21432132'], Bb: ['21231234', '21321432'],
+    F: ['12341234', '54321321'], C: ['12312345', '54321321'], G: ['12312345', '54321321'], D: ['12312345', '54321321'] }
+};
+const fingers = (root, id, hand, octaves = 1) => runOf(root, id, { hand, octaves }).map(x => x.finger).join('');
+for (const [id, table] of Object.entries(FINGERING)) for (const [root, [rh, lh]] of Object.entries(table))
+  check(`${root} ${id === 'major' ? 'major' : 'harmonic minor'} fingering, right and left hand`, [fingers(root, id, 'right'), fingers(root, id, 'left')], [rh, lh]);
+check('C major over two octaves: right hand 123 1234 123 1234 5', fingers('C', 'major', 'right', 2), '123123412312345');
+check('C major over two octaves: left hand 54321 321 4321 321', fingers('C', 'major', 'left', 2), '543213214321321');
+check('C major pentatonic: right hand 1 2 3 1 2 3, left hand 3 2 1 3 2 1', [fingers('C', 'majpenta', 'right'), fingers('C', 'majpenta', 'left')], ['123123', '321321']);
+check('C blues scale, right hand 1 2 3 4 1 2 3', fingers('C', 'blues', 'right'), '1234123');
+let fingerBad = [];
+for (const sc of T.SCALES) for (let r = 0; r < 12; r++) for (const hand of ['right', 'left']) for (const octaves of [1, 2]) {
+  const root = T.scaleRootName(r, sc.iv), run = runOf(root, sc.id, { hand, octaves }), f = run.map(x => x.finger), tag = `${root} ${sc.id} ${hand} ${octaves}`;
+  // Thumbs on white keys only, when two white keys an octave can take them (groups of two to four notes);
+  // a scale with fewer white keys, like D♭ major pentatonic with only F, needs the thumb on a black key once an octave
+  const black = m => NAMES[m % 12].includes('#'), N = sc.iv.length;
+  const whites = sc.iv.map((iv, k) => black(r + T.IV[iv][0]) ? -1 : k).filter(k => k >= 0);
+  const twoWhite = whites.some(a => whites.some(b => { const d = (b - a + N) % N; return d >= 2 && d <= 4 && N - d >= 2 && N - d <= 4; }));
+  const blackThumbs = run.slice(0, N).filter(x => x.finger === 1 && black(x.m)).length;
+  if (whites.length && blackThumbs > (twoWhite ? 0 : 1)) fingerBad.push(tag + ' thumb on a black key');
+  if (run.some((x, i) => i && x.m <= run[i - 1].m) || run[0].m < T.PIANO_LO || run[run.length - 1].m > 95) fingerBad.push(tag + ' range');
+  if (run.some(x => x.m % 12 !== (r + T.IV[sc.iv[x.degree]][0]) % 12)) fingerBad.push(tag + ' notes');
+  // going up, the right hand moves to the next finger or passes the thumb under; the left hand the other way round
+  for (let i = 1; i < f.length; i++) {
+    const a = f[i - 1], b = f[i];
+    const ok = hand === 'right' ? b === a + 1 || (b === 1 && a >= 2) : b === a - 1 || (a === 1 && b >= 2);
+    if (!ok) fingerBad.push(`${tag} ${a}→${b} at ${i}`);
+  }
+  // the 5th finger only at the end of the hand, and every octave fingered the same
+  if (f.slice(1, -1).includes(5)) fingerBad.push(tag + ' 5 in the middle');
+  const n = sc.iv.length;
+  if (octaves === 2 && f.slice(1, n).join() !== f.slice(n + 1, 2 * n).join()) fingerBad.push(tag + ' octaves differ');
 }
-check('every scale from every root, one and two octaves: rising from root to root, on the keyboard', scaleBad, []);
+check('every scale, root, hand and one or two octaves: thumb on white keys, smooth crossings, the same fingering each octave', fingerBad, []);
+
+check('key signatures: A harmonic minor none, C blues 3 flats, F# major 6 sharps, G# harmonic minor 5 sharps',
+  [T.keySignature('A', 'harmminor'), T.keySignature('C', 'blues'), T.keySignature('F#', 'major'), T.keySignature('G#', 'harmminor')].map(k => k.acc * k.letters.length), [0, -3, 6, 5]);
+check('the flats of C minor are written B E A', T.keySignature('C', 'minor').letters, ['B', 'E', 'A']);
+let sigBad = [];
+for (const sc of T.SCALES) for (let r = 0; r < 12; r++) { const k = T.keySignature(T.scaleRootName(r, sc.iv), sc.id); if (!k || k.letters.length > 7) sigBad.push(`${sc.id} ${r}`); }
+check('every scale in every key has a key signature of at most seven sharps or flats', sigBad, []);
+const accOf = (root, id) => { const run = runOf(root, id), seq = run.concat(run.slice(0, -1).reverse()), bars = seq.map((x, i) => i >= run.length ? 1 : 0);
+  return T.writtenAccidentals(seq, T.keySignature(root, id), bars); };
+check('A harmonic minor: the G sharp needs a sharp going up and again in the next bar going down', accOf('A', 'harmminor').filter(a => a !== null), [1, 1]);
+check('C blues: G flat gets a flat, the G after it a natural', accOf('C', 'blues').slice(0, 5), [null, null, null, -1, 0]);
+check('G# harmonic minor: F double sharp', accOf('G#', 'harmminor').filter(a => a !== null), [2, 2]);
+check('C major needs no accidentals', accOf('C', 'major').every(a => a === null), true);
 
 const lead = (prog, key) => T.voiceLeadProgression(T.progressionChords(prog, key, 0).map(c => ({
   rootPc: T.parseNote(c.root).pc, ivs: ivsOf(c.q), bassPc: c.bass ? T.parseNote(c.bass).pc : null })));
