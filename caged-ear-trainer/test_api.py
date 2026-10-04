@@ -118,6 +118,12 @@ def test_static_files_are_served(client):
     assert client.get("/static/nothing.js").status_code == 404
 
 
+def test_page_and_scripts_are_always_revalidated(client):
+    # after an update the browser must not keep showing the old page from its cache
+    for path in ["/", "/static/ui.js", "/static/style.css"]:
+        assert client.get(path).headers["cache-control"] == "no-cache", path
+
+
 def test_caged_exercises_are_accepted(client):
     pid = make_profile(client)
     attempt(client, pid, exercise="caged_play", item="Minor, A shape", correct=True)
