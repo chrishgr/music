@@ -14,6 +14,8 @@ note on the piano, and a click on a piano key shows every place on the neck with
 | **Chords** | Thirteen chord types with movable grips shown as chord diagrams. The chosen grip is what the neck, the piano and the Play buttons use. Links to the CAGED shapes and to the scales that contain the chord |
 | **CAGED** | The five CAGED shapes for **major, minor, 7, m7 and maj7**, in neck order. *Compare with the major shape* marks which notes moved and lists the changes. A scale can be shown around the shape. *Play all five up the neck* lights each shape as it sounds. *Practice*: play a named shape on the neck, or name a shape that is shown |
 | **Triads** | Triads from any open chord with a capo (0 to 12) on any string set, in root position and both inversions. *Practice*: play a named triad or recognise one |
+| **Progressions** | Twelve well-known chord progressions (I–V–vi–IV, the 50s progression, ii–V–I, 12-bar blues, the Andalusian cadence and more) in any major or minor key. Choose a capo and the page shows the shapes to play; it also lists the capo positions where every chord is an open chord. *Play along* counts in one bar and strums the chords in time (once per bar, every beat, or down and up), with the current bar, grip and notes lit up |
+| **Metronome** | A plain metronome (30–260 BPM, 2 to 7 beats per bar, up to four notes per click, accent, tap tempo, click volume) and eight guided exercises that set it up for you: subdivision ladder, gap click, click on 2 and 4, click on the offbeat, speed trainer, spider (the neck shows the note to play in time), burst, and one minute changes with your results kept in the browser |
 | **Ear training** | Intervals, or chord qualities, weighted towards the items you miss most |
 | **Tuner** | Tune the guitar, hit a target note with your voice or instrument, or guess a note by ear |
 | **Profile** | Only with the backend running: profiles, points, accuracy per exercise, weakest items, the last 14 days and a leaderboard |
@@ -88,7 +90,7 @@ Profiles have no passwords. This is meant for one computer or a home network, no
 
 ```bash
 pytest -q                 # backend: 16 tests
-node verify_notes.mjs     # theory, shapes, sound and pitch detection: 6236 checks, about 20 seconds
+node verify_notes.mjs     # theory, shapes, progressions, rhythm, sound and pitch detection: 8242 checks, about 20 seconds
 ```
 
 `verify_notes.mjs` loads `static/theory.js`, the same file the page uses, and checks it against
@@ -115,6 +117,11 @@ hand-written expected answers:
     7 and maj7 turn one root (or in the C shape the fifth) into the seventh, m7 does the same to minor
 17. Chords built from scales, with Roman numerals, for example Imaj7 ii7 iii7 IVmaj7 V7 vi7 viiø7 in major
 18. Which scales contain a chord, and the usual scale for each CAGED chord
+19. Chord progressions in known keys (I–V–vi–IV in G is G D Em C; the Andalusian cadence in E minor is
+    Em D C B), shapes with a capo, the capo positions that give only open chords, and that the Roman
+    numerals agree with the chords of the key in every key and with every capo
+20. Metronome patterns: clicks and subdivisions in a beat, 2 and 4, offbeat, gap click, speed trainer,
+    subdivision ladder, tap tempo, the spider pattern and the click sound
 
 Random noise uses a fixed seed, so every run gives the same result.
 
@@ -134,6 +141,10 @@ app also runs when `index.html` is opened directly from disk.
   sound and the lights together.
 - `makeDrill()` is the practice engine shared by the Triads and CAGED pages: new task, marks on the neck,
   check, show answer, multiple choice and scoring.
+- `startClock()` is the metronome clock used by the Metronome and Progressions pages. It looks 0.12 s ahead
+  and puts every click and strum on the audio clock (`playAt`, `clickAt`, `strumAt`), so the timing stays
+  exact even while the page redraws. The rhythm rules themselves (which clicks sound in a beat, the speed
+  trainer, gap bars) are pure functions in `theory.js`.
 
 ## Sources for the theory
 
@@ -156,4 +167,13 @@ The expected answers in `verify_notes.mjs` follow these references:
 - The usual scale over each chord (Dorian on m7, Mixolydian on 7, Ionian on maj7): Open Music Theory,
   [Chord-Scale Theory](https://viva.pressbooks.pub/openmusictheorycopy/chapter/chord-scale-theory/)
 - Diatonic seventh chords in major and harmonic minor: [Diatonic Seventh Chords](https://pressbooks.pub/harmonyandmusicianshipwithsolfege/chapter/diatonic-seventh-chords/)
+- Common chord progressions (I–V–vi–IV, I–vi–IV–V, vi–IV–I–V, ii–V–I, 12-bar blues, Andalusian cadence):
+  [Native Instruments, 10 most popular chord progressions](https://blog.native-instruments.com/common-chord-progressions/),
+  [LANDR, 7 common chord progressions](https://blog.landr.com/common-chord-progressions/)
+- Metronome exercises: subdivision ladder and burst, [ArtistWorks, Mastering Time](https://blog.artistworks.com/mastering-time-the-best-metronome-exercises-for-guitarists-to-build-speed-and-accuracy/);
+  gap click and click on 2 and 4, [Soundbrenner, 5 metronome exercises to build your internal clock](https://www.soundbrenner.com/blogs/articles/5-metronome-exercises-build-internal-clock);
+  offbeat click, [Guitarwiz, practising on the offbeat](https://guitarwiz.app/articles/guitar-metronome-offbeat-practice/);
+  speed trainer, [Musokit, speed trainer](https://musokit.com/speed-trainer);
+  spider exercise, [Guitar World, the spider exercise](https://www.guitarworld.com/lessons/spider-exercise);
+  one minute changes, [JustinGuitar, One Minute Changes](https://www.justinguitar.com/guitar-lessons/one-minute-changes-f1-im-112)
 - YIN pitch detection: de Cheveigné and Kawahara (2002), [YIN, a fundamental frequency estimator for speech and music](http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf)
