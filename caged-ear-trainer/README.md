@@ -20,6 +20,15 @@ note on the piano, and a click on a piano key shows every place on the neck with
 | **Tuner** | Tune the guitar, hit a target note with your voice or instrument, or guess a note by ear |
 | **Profile** | Only with the backend running. *Overview*: points and accuracy week by week, accuracy per exercise with its trend, and suggestions for what to practise next. *Summaries*: any day, week or month compared with the one before. *Goals*: daily, weekly and monthly goals that repeat, and long-term goals with a date. *Leaderboard*: profiles ranked by points this week, this month or overall, also per exercise |
 
+Every exercise (Play and Name the shape on the CAGED page, Play it and Recognise on the Triads page,
+both Ear training exercises, Hit the note and Guess the note) has a **Timer** box. When it is ticked, a
+field for the seconds per task appears (30 by default, 3 to 600) with a countdown. When the time runs out,
+a task that has not been answered counts as a wrong answer and is saved as one. Marks already placed on the
+neck are checked as they are. The answer is shown and heard, and after a few seconds the next task comes by
+itself. An answer given in time also moves on by itself, so a timed round runs until the box is unticked.
+Each exercise keeps its own setting, and leaving the page stops the time. Hit the note only counts down
+while the microphone is on, since it cannot be answered without it.
+
 Labels on the neck can show note names, scale degrees (1 b3 5), intervals (R m3 M3 P5) or, on the Triads
 page with a capo, the note names of the shape as if there were no capo. Note names can be English (B) or
 German and Nordic (H for B natural, B for B flat). The root you choose is shared by Scales, Chords and CAGED.
@@ -203,6 +212,9 @@ app also runs when `index.html` is opened directly from disk.
 - `profile.js` sends every answer (`logAttempt`) and every finished practice session (`logSession`, through
   `startSession` and `endSession` in `ui.js`) to the backend. Its charts are small SVGs drawn at the width of
   their slot, with a tooltip on hover and keyboard focus and a table view of the same numbers.
+- `makeTimer()` is the task timer shared by every exercise. A page tells it which task is waiting for an
+  answer, what to do when the time runs out and how to make the next task; the timer counts down, counts
+  the task as wrong and moves on. `makeDrill()` sets one up for the CAGED and Triads practice.
 - `startClock()` is the metronome clock used by the Metronome and Progressions pages. It looks 0.12 s ahead
   and puts every click and strum on the audio clock (`playAt`, `clickAt`, `strumAt`), so the timing stays
   exact even while the page redraws. The rhythm rules themselves (which clicks sound in a beat, the speed

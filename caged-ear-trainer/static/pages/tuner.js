@@ -9,8 +9,17 @@ const REF_A = 57;                                   // A3, reference note for "G
 const GAUGE_CENTER = 270, GAUGE_SCALE = 4.8;        // pixels per cent
 const HOLD_SECONDS = 0.7, HIT_TOLERANCE = 20;       // cents
 const mic = { stream: null, analyser: null, buf: null, timer: null, hist: [], silent: 0, last: 0, needle: 0 };
-const hit = { target: null, hold: 0, solved: false, hits: 0, tries: 0 };
+const hit = { target: null, hold: 0, solved: false, missed: false, hits: 0, tries: 0 };
 const guess = { q: null, answered: false, right: 0, total: 0 };
+// Hit the note can only be answered with the microphone on, so its time only runs while it listens
+const HIT_TIMER = makeTimer({
+  prefix: 'hit', page: 'tuner', subs: ['hit'], key: () => 'tuner_hit',
+  waiting: () => !!hit.target && !hit.solved && !hit.missed && !!mic.stream, timeUp: hitTimeUp, next: newHitTarget
+});
+const GUESS_TIMER = makeTimer({
+  prefix: 'guess', page: 'tuner', subs: ['guess'], key: () => 'tuner_guess',
+  waiting: () => !!guess.q && !guess.answered, timeUp: guessTimeUp, next: newGuess
+});
 const pcName = pc => noteName(ROOTS[((pc % 12) + 12) % 12]);
 const octaveOf = m => Math.floor(m / 12) - 1;
 const midiLabel = m => pcName(m) + octaveOf(m);
@@ -48,11 +57,13 @@ async function startMic() {
     Object.assign(mic, { stream, analyser, buf: new Float32Array(analyser.fftSize), hist: [], silent: 0, last: performance.now() });
     mic.timer = setInterval(tick, 60);
     $('micNotice').hidden = true;
+    HIT_TIMER.start();
   } catch (e) { showMicProblem(); }
   renderTuner();
 }
 function stopMic() {
   clearInterval(mic.timer);
+  HIT_TIMER.cancel();
   if (mic.stream) mic.stream.getTracks().forEach(t => t.stop());
   Object.assign(mic, { stream: null, analyser: null, hist: [] });
   renderReading(null);
@@ -107,6 +118,7 @@ function renderReading(f) {
       cents = foldCents(midi, hit.target, TU.anyOct);
       const semis = Math.round(cents / 100);
       if (hit.solved) msg = 'Hit!';
+      else if (hit.missed) msg = 'Time is up';
       else if (Math.abs(semis) >= 1) msg = `${Math.abs(semis)} semitone${Math.abs(semis) > 1 ? 's' : ''} ${semis < 0 ? 'flat' : 'sharp'}`;
       else msg = Math.abs(cents) <= HIT_TOLERANCE ? 'Hold it there' : cents < 0 ? 'Slightly flat' : 'Slightly sharp';
     }
@@ -128,11 +140,20 @@ function markStrings(okMidi) {
 
 /* --- Hit the note --- */
 function newHitTarget() {
-  if (hit.target && !hit.solved) logAttempt('tuner_hit', pcName(hit.target), null, false, hit.lastCents);   // skipped = missed
+  if (hit.target && !hit.solved && !hit.missed) logAttempt('tuner_hit', pcName(hit.target), null, false, hit.lastCents);   // skipped = missed
   hit.target = randomIn(RANGES[TU.range]);
   hit.lastCents = null;
-  hit.hold = 0; hit.solved = false; hit.tries++;
+  hit.hold = 0; hit.solved = false; hit.missed = false; hit.tries++;
+  HIT_TIMER.start();
   playHitTarget();
+  renderTuner();
+}
+// No hit in time: a miss. The name is shown and the note played, so you know what it was.
+function hitTimeUp() {
+  if (!hit.target || hit.solved || hit.missed) return;
+  hit.missed = true; hit.hold = 0;
+  logAttempt('tuner_hit', pcName(hit.target), 'Time ran out', false, hit.lastCents);
+  stopAll(); play(hit.target, 0);
   renderTuner();
 }
 function playHitTarget() {
@@ -141,7 +162,7 @@ function playHitTarget() {
   play(hit.target, 0);
 }
 function updateHit(f, dt) {
-  if (!hit.target || hit.solved) return;
+  if (!hit.target || hit.solved || hit.missed) return;
   const c = f ? foldCents(freqToMidi(f), hit.target, TU.anyOct) : null;
   if (c !== null) hit.lastCents = Math.round(c * 10) / 10;
   if (c !== null && Math.abs(c) <= HIT_TOLERANCE) hit.hold += dt;
@@ -149,6 +170,7 @@ function updateHit(f, dt) {
   if (hit.hold >= HOLD_SECONDS) {
     hit.solved = true; hit.hits++;
     logAttempt('tuner_hit', pcName(hit.target), null, true, hit.lastCents);
+    HIT_TIMER.answered(true);
     renderTuner();
   }
   $('holdBar').firstElementChild.style.width = `${Math.min(100, 100 * hit.hold / HOLD_SECONDS)}%`;
@@ -158,6 +180,7 @@ function updateHit(f, dt) {
 function newGuess() {
   guess.q = { m: randomIn(RANGES[TU.range]) };
   guess.answered = false;
+  GUESS_TIMER.start();
   playGuess();
   renderTuner();
 }
@@ -175,6 +198,17 @@ function answerGuess(pc) {
   guess.q.ok = pc === m % 12;
   guess.total++; if (guess.q.ok) guess.right++;
   logAttempt('tuner_guess', pcName(m), pcName(pc), guess.q.ok);
+  GUESS_TIMER.answered(guess.q.ok);
+  renderTuner();
+}
+// No answer in time: wrong, and the note is played again
+function guessTimeUp() {
+  if (!guess.q || guess.answered) return;
+  guess.answered = true;
+  Object.assign(guess.q, { chosen: null, ok: false, late: true });
+  guess.total++;
+  logAttempt('tuner_guess', pcName(guess.q.m), 'Time ran out', false);
+  stopAll(); play(guess.q.m, 0);
   renderTuner();
 }
 
@@ -202,7 +236,7 @@ function renderTuner(sub = TU.mode) {
   // target line above the big note
   let tgt = '';
   if (m === 'tune' && TU.str !== 'auto') tgt = `Tuning the ${midiLabel(TUNING[+TU.str])} string`;
-  if (m === 'hit' && hit.target) tgt = TU.showName ? `Target ${midiLabel(hit.target)}` : 'Target hidden';
+  if (m === 'hit' && hit.target) tgt = TU.showName || hit.missed ? `Target ${midiLabel(hit.target)}` : 'Target hidden';
   $('tTarget').textContent = tgt;
   $('holdBar').hidden = m !== 'hit' || !hit.target;
   if (m === 'hit') $('holdBar').firstElementChild.style.width = `${Math.min(100, 100 * hit.hold / HOLD_SECONDS)}%`;
@@ -212,6 +246,7 @@ function renderTuner(sub = TU.mode) {
   $('hitPrompt').textContent = !mic.stream ? 'Start the microphone, press “New note”, and sing or play the note.'
     : !hit.target ? 'Press “New note”, and sing or play the note until the needle stays in the green zone.'
     : hit.solved ? 'Hit! Press “New note” for the next one.'
+    : hit.missed ? `Time is up. The note was ${midiLabel(hit.target)}.`
     : TU.anyOct ? 'Sing or play the note. Any octave counts.' : 'Sing or play the note in the same octave.';
 
   $('guessReplay').disabled = !guess.q;
@@ -222,11 +257,13 @@ function renderTuner(sub = TU.mode) {
     : TU.ref ? 'First an A as reference, then the note. Which note was it?' : 'Which note did you hear?';
   const q = guess.q;
   if (q && guess.answered) {
-    const dist = Math.abs(foldCents(q.chosen, q.m % 12, true) / 100);
+    const dist = q.late ? 0 : Math.abs(foldCents(q.chosen, q.m % 12, true) / 100);
     $('guessFeedback').innerHTML = q.ok
       ? `<span class="verdict good">Correct, it was ${midiLabel(q.m)}</span>`
+      : q.late ? `<span class="verdict bad">Time is up. It was ${midiLabel(q.m)}</span>`
       : `<span class="verdict bad">It was ${midiLabel(q.m)}</span><span class="sub">You answered ${pcName(q.chosen)}, which is ${dist} semitone${dist > 1 ? 's' : ''} away.</span>`;
   } else $('guessFeedback').innerHTML = '';
+  HIT_TIMER.render(); GUESS_TIMER.render();
   $('guessAnswers').innerHTML = ROOTS.map((r, pc) => {
     let cls = '';
     if (q && guess.answered) { if (pc === q.m % 12) cls = 'correct'; else if (pc === q.chosen) cls = 'wrong'; }
@@ -260,6 +297,7 @@ PAGES.tuner = {
       renderTuner();
     });
     $('hitNew').addEventListener('click', newHitTarget);
+    HIT_TIMER.bind(); GUESS_TIMER.bind();
     $('hitReplay').addEventListener('click', playHitTarget);
     $('guessNew').addEventListener('click', newGuess);
     $('guessReplay').addEventListener('click', playGuess);
