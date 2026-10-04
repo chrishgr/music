@@ -14,6 +14,9 @@ const PAGE_OF = {
   metronome: '#/metronome/click', drill: '#/metronome/exercises', progressions: '#/progressions', changes: '#/metronome/exercises'
 };
 const nameOf = k => EXERCISES[k] || ACTIVITY_NAMES[k] || k;
+// In piano mode the CAGED and Triads pages are hidden, so their exercises get no link and no suggestions
+const guitarOnly = k => pianoMode() && /^#\/(caged|triads)\//.test(PAGE_OF[k] || '');
+const pageOf = k => guitarOnly(k) ? '' : PAGE_OF[k] || '';
 const PF = { summary: { period: 'week', day: null }, board: 'week', token: 0 };
 const pctTxt = a => a === null || a === undefined ? '–' : `${Math.round(a * 100)}%`;
 const num = v => v === null || v === undefined ? '–' : new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(v);
@@ -206,11 +209,11 @@ function goalTitle(g) {
 }
 function suggestionHtml(s) {
   const pct = v => `${Math.round(v * 100)}%`;
-  let text, link = PAGE_OF[s.exercise], go = s.exercise ? `Practise ${nameOf(s.exercise)}` : '', good = false;
+  let text, link = pageOf(s.exercise), go = s.exercise ? `Practise ${nameOf(s.exercise)}` : '', good = false;
   switch (s.kind) {
     case 'goal_behind':
       text = `Your goal “${goalTitle(s)}” is behind: ${num(s.value)} so far. ${paceText(s)}.`;
-      link = s.scope && PAGE_OF[s.scope] ? PAGE_OF[s.scope] : '#/profile/goals'; go = s.scope ? `Practise ${nameOf(s.scope)}` : 'See your goals'; break;
+      link = s.scope && pageOf(s.scope) ? pageOf(s.scope) : '#/profile/goals'; go = s.scope ? `Practise ${nameOf(s.scope)}` : 'See your goals'; break;
     case 'weak_item': text = `${s.item} in ${nameOf(s.exercise)}: ${pct(s.accuracy)} right in the last 60 days (${s.answers} answers).`; break;
     case 'slipping': text = `${nameOf(s.exercise)} has dropped from ${pct(s.before)} to ${pct(s.recent)} right in the last two weeks.`; break;
     case 'improving': text = `${nameOf(s.exercise)} is up from ${pct(s.before)} to ${pct(s.recent)} right in the last two weeks. Well done.`; good = true; go = ''; break;
@@ -231,6 +234,7 @@ async function renderOverview(token) {
   try { o = await api(`/profiles/${API.profile}/overview`); } catch (e) { box.innerHTML = `<p class="form-msg bad">${esc(e.message)}</p>`; return; }
   if (token !== PF.token) return;
   const w = o.progress, now = w[w.length - 1], last = o.same_days_before.week;
+  const tips = o.suggestions.filter(t => !guitarOnly(t.exercise));
   const lastName = Math.round((parseDay(last.end) - parseDay(last.start)) / 864e5) < 6 ? 'the same days last week' : 'last week';
   const wk = r => fmtDate(r.start, { day: 'numeric', month: 'short' });
   box.innerHTML = `
@@ -244,7 +248,7 @@ async function renderOverview(token) {
       ${tile(plural(o.practice_streak, 'day'), 'practice streak', `<span class="delta">best run of right answers: ${o.streak.best}</span>`)}
     </div>
     <div class="card"><h3>What to practise next</h3>
-      ${o.suggestions.length ? `<ul class="suggest">${o.suggestions.map(suggestionHtml).join('')}</ul>` : '<p class="hint">Do a few tasks on the other pages, and suggestions show up here.</p>'}</div>
+      ${tips.length ? `<ul class="suggest">${tips.map(suggestionHtml).join('')}</ul>` : '<p class="hint">Do a few tasks on the other pages, and suggestions show up here.</p>'}</div>
     <div class="pf-grid">
       <div class="card"><h3>Points per week</h3><p class="sub-title">The last 12 weeks</p>
         ${chartSlot(width => columnChart(w.map(r => ({ x: wk(r), v: r.points, tip: `${num(r.points)} points|week of ${wk(r)}` })), { label: 'Points per week', width }))}
@@ -257,7 +261,7 @@ async function renderOverview(token) {
       <div class="scroll"><table class="tbl"><thead><tr><th>Exercise</th><th class="num">Answers</th><th class="num">Right, all time</th><th class="num">Last 14 days</th><th class="num">The 14 days before</th><th class="num">Last practised</th></tr></thead><tbody>
       ${o.exercises.length ? o.exercises.map(e => {
         const trend = e.recent !== null && e.before !== null ? (e.recent > e.before + 0.05 ? ' ▲' : e.recent < e.before - 0.05 ? ' ▼' : '') : '';
-        return `<tr><td><a class="more" href="${PAGE_OF[e.exercise]}">${nameOf(e.exercise)}</a></td><td class="num">${e.answers}</td><td class="num">${pctTxt(e.accuracy)}</td><td class="num">${pctTxt(e.recent)}${trend}</td><td class="num">${pctTxt(e.before)}</td><td class="num">${e.days_since === 0 ? 'today' : e.days_since === 1 ? 'yesterday' : e.days_since + ' days ago'}</td></tr>`;
+        return `<tr><td>${pageOf(e.exercise) ? `<a class="more" href="${pageOf(e.exercise)}">${nameOf(e.exercise)}</a>` : nameOf(e.exercise)}</td><td class="num">${e.answers}</td><td class="num">${pctTxt(e.accuracy)}</td><td class="num">${pctTxt(e.recent)}${trend}</td><td class="num">${pctTxt(e.before)}</td><td class="num">${e.days_since === 0 ? 'today' : e.days_since === 1 ? 'yesterday' : e.days_since + ' days ago'}</td></tr>`;
       }).join('') : '<tr><td colspan="6">No answers saved yet. Do a few tasks on the other pages.</td></tr>'}
       </tbody></table></div></div>
     <p class="hint">Your ${num(o.score.total)} points: ${num(o.score.answers)} for right answers, ${num(o.score.streaks)} for runs of right answers, ${num(o.score.practice)} for practice time and ${num(o.score.days)} for practice days. <a class="more" href="#/profile/leaderboard">How points work</a></p>`;
@@ -319,7 +323,7 @@ async function renderSummary(token) {
     </div>
     <div class="pf-grid">
       <div class="card"><h3>Went well</h3>${s.best.length ? `<ul class="suggest">${s.best.map(i => `<li class="good"><span>${esc(i.item)}, ${nameOf(i.exercise)}</span><span>${i.correct} of ${i.answers}</span></li>`).join('')}</ul>` : '<p class="hint">Items with at least three answers and 80 % right show up here.</p>'}</div>
-      <div class="card"><h3>To work on</h3>${s.weakest.length ? `<ul class="suggest">${s.weakest.map(i => `<li><span>${esc(i.item)}, ${nameOf(i.exercise)}</span><a class="more" href="${PAGE_OF[i.exercise]}">${i.correct} of ${i.answers}, practise</a></li>`).join('')}</ul>` : '<p class="hint">Nothing below 80 % right. Nice.</p>'}</div>
+      <div class="card"><h3>To work on</h3>${s.weakest.length ? `<ul class="suggest">${s.weakest.map(i => `<li><span>${esc(i.item)}, ${nameOf(i.exercise)}</span>${pageOf(i.exercise) ? `<a class="more" href="${pageOf(i.exercise)}">${i.correct} of ${i.answers}, practise</a>` : `<span>${i.correct} of ${i.answers}</span>`}</li>`).join('')}</ul>` : '<p class="hint">Nothing below 80 % right. Nice.</p>'}</div>
     </div>`}
     ${s.goals_met.length ? `<div class="card"><h3>Goals reached</h3><ul class="suggest">${s.goals_met.map(g => `<li class="good"><span>${esc(goalTitle(g))}</span><span>✓</span></li>`).join('')}</ul></div>` : ''}`;
 }

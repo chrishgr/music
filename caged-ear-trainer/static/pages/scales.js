@@ -1,9 +1,12 @@
-/* Scales: a scale on the neck and the piano, one position at a time if wanted, and the chords built from it */
+/* Scales: a scale on the neck and the piano, one position at a time if wanted, and the chords built from it.
+   In piano mode Play runs the scale up and down the keyboard over one or two octaves, and the neck areas are not used. */
 const SC = { chord: null, playing: null };   // chord: index of the chord from the scale that is shown. playing: the area Play is using
 const SCALE_SPAN = 4;                          // a position covers five frets, the first one and four more
 const STEP_NAMES = { 1: 'H', 2: 'W', 3: 'W+H' };
 const scaleNow = () => SCALES.find(s => s.id === state.scale) || SCALES[0];
-const scaleArea = () => state.scalePos === 'all' ? null : { lo: +state.scalePos, hi: Math.min(FRETS, +state.scalePos + SCALE_SPAN) };
+const scaleArea = () => pianoMode() || state.scalePos === 'all' ? null : { lo: +state.scalePos, hi: Math.min(FRETS, +state.scalePos + SCALE_SPAN) };
+// The notes Play uses on the piano: up from the root over one or two octaves
+const pianoRun = () => pianoScale(rootPc(), scaleNow().iv, state.scaleOct);
 // With the whole neck shown, Play uses the position around the root on the low E string
 function defaultArea() {
   const lo = Math.max(0, (rootPc() - TUNING[0] % 12 + 12) % 12 - 1);
@@ -25,15 +28,25 @@ const keyChords = () => diatonicChords(state.root, state.scale, state.scaleKind 
 
 function playScale() {
   stopAll();
+  if (pianoMode()) {
+    const run = pianoRun(), seq = run.concat(run.slice(0, -1).reverse()), step = 0.26;
+    SC.playing = { piano: true }; renderScales();
+    playPiano(seq, { broken: true, step });
+    later(seq.length * step + 0.3, () => { SC.playing = null; renderScales(); });
+    return;
+  }
   const area = scaleArea() || defaultArea(), run = scaleRun(area);
   const seq = run.concat(run.slice(0, -1).reverse()), step = 0.26;
   SC.playing = area; renderScales();
   seq.forEach((n, i) => play(n.m, i * step, state.inst, noteKey(n.st, n.f)));
   later(seq.length * step + 0.3, () => { SC.playing = null; renderScales(); });
 }
-// A chord from the scale, close together from the third octave: all at once, then note by note
+// A chord from the scale, close together from the third octave: all at once, then note by note.
+// In piano mode: its root position voicing near middle C, with the piano sound.
+const keyChordVoicing = c => pianoVoicings(parseNote(c.root).pc, c.chord.iv)[0].notes;
 function playKeyChord(c) {
   stopAll();
+  if (pianoMode()) { const ms = keyChordVoicing(c); playPiano(ms); playPiano(ms, { at: 1.1, broken: true }); return; }
   const base = 48 + parseNote(c.root).pc, ms = c.chord.iv.map(iv => base + IV[iv][0]);
   ms.forEach((m, i) => play(m, i * 0.03));
   ms.forEach((m, i) => play(m, 1.1 + i * 0.28));
@@ -66,17 +79,29 @@ function renderScales() {
     dots = neckDots(tones, { cls: (t, st, f) => t.role + (inArea(f) ? '' : ' faint') });
     keys = new Map(tones.map(t => [t.pc, t]));
   }
+  // Piano mode: the notes Play uses, or the chord from the scale, marked strongly; the same notes in other octaves faint
+  if (pianoMode()) {
+    const ct = ch ? tonesOf(ch.root, ch.chord.iv) : null;
+    const strong = ch ? pianoMarks(keyChordVoicing(ch), ct) : pianoMarks(pianoRun(), tones);
+    keys = new Map([...keys].map(([pc, t]) => [pc, { ...t, cls: (t.cls || t.role) + ' faint' }]));
+    renderKeys($('scKeys'), { byMidi: strong, byPc: keys });
+  } else renderKeys($('scKeys'), { byPc: keys });
+  setPressed($('scOct'), state.scaleOct);
   const bands = [];
   if (area) bands.push({ lo: area.lo, hi: area.hi, label: area.lo === 0 ? 'Open position' : `Frets ${area.lo}–${area.hi}` });
-  if (SC.playing && (!area || SC.playing.lo !== area.lo)) bands.push({ lo: SC.playing.lo, hi: SC.playing.hi, label: 'Playing', cls: 'active' });
+  if (SC.playing && SC.playing.piano) { /* the piano plays, the neck only shows the scale */ }
+  else if (SC.playing && (!area || SC.playing.lo !== area.lo)) bands.push({ lo: SC.playing.lo, hi: SC.playing.hi, label: 'Playing', cls: 'active' });
   else if (SC.playing) bands[0].cls = 'active';
   renderNeck($('scNeck'), { bands, dots });
-  renderKeys($('scKeys'), { byPc: keys });
   const roles = new Set((ch ? tonesOf(ch.root, ch.chord.iv) : tones).map(t => t.role));
   $('scLegend').innerHTML = legendHtml(['root', 'third', 'fifth', 'seventh', 'other'].filter(k => roles.has(k)));
 
-  $('scHint').textContent = ch
+  $('scHint').textContent = ch && pianoMode()
+    ? `The marked keys are ${chordSymbol(ch.root, ch.chord.id)}, the ${ch.roman} chord, in root position near middle C. Faint dots are the notes of the scale. Click the chord again to go back to the scale.`
+    : ch
     ? `Coloured dots are ${chordSymbol(ch.root, ch.chord.id)}, the ${ch.roman} chord, labelled from its own root. Rings are the other notes of the scale. Click the chord again to go back to the scale.`
+    : pianoMode()
+      ? `Play runs up the scale from the root and back down, over ${state.scaleOct === 2 ? 'two octaves' : 'one octave'}. The marked keys are the notes it plays; faint dots are the same notes in other octaves.`
     : area
       ? 'Play goes from the lowest root in this area to the highest and back down. Faint dots are the same scale outside the area. Use the arrows or the ← → keys to move along the neck.'
       : 'Play uses the position around the root on the low E string and lights up each note as it sounds. Choose a neck area to see one position at a time.';
@@ -110,6 +135,7 @@ PAGES.scales = {
     $('scPrev').addEventListener('click', () => stepArea(-1));
     $('scNext').addEventListener('click', () => stepArea(1));
     $('scPlay').addEventListener('click', playScale);
+    onButton($('scOct'), b => { state.scaleOct = +b.dataset.v; save(); stopAll(); renderScales(); });
     onButton($('scKind'), b => { state.scaleKind = b.dataset.v; save(); renderScales(); });
     onButton($('scChords'), b => {
       const i = +b.dataset.i, c = keyChords()[i];
@@ -122,6 +148,6 @@ PAGES.scales = {
   render: renderScales,
   onRoot() { SC.chord = null; },
   keys(e) {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); stepArea(e.key === 'ArrowLeft' ? -1 : 1); }
+    if (!pianoMode() && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); stepArea(e.key === 'ArrowLeft' ? -1 : 1); }
   }
 };
