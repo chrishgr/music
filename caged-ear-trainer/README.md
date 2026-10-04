@@ -11,10 +11,10 @@ note on the piano, and a click on a piano key shows every place on the neck with
 | --- | --- |
 | **Home** | One card per page, and how the pages fit together |
 | **Scales** | Ten scales and modes on the whole neck or one five-fret position at a time. Play runs root to root through the position. *Chords in this scale* builds the triads or seventh chords on each degree, with Roman numerals; click one to hear it and see it inside the scale |
-| **Chords** | Thirteen chord types with movable grips shown as chord diagrams. The chosen grip is what the neck, the piano and the Play buttons use. Links to the CAGED shapes and to the scales that contain the chord |
+| **Chords** | Fourteen chord types with movable grips shown as chord diagrams. The chosen grip is what the neck, the piano and the Play buttons use. Links to the CAGED shapes and to the scales that contain the chord |
 | **CAGED** | The five CAGED shapes for **major, minor, 7, m7 and maj7**, in neck order. *Compare with the major shape* marks which notes moved and lists the changes. A scale can be shown around the shape. *Play all five up the neck* lights each shape as it sounds. *Practice*: play a named shape on the neck, or name a shape that is shown |
 | **Triads** | Triads from any open chord with a capo (0 to 12) on any string set, in root position and both inversions. *Practice*: play a named triad or recognise one |
-| **Progressions** | Twelve well-known chord progressions (I–V–vi–IV, the 50s progression, ii–V–I, 12-bar blues, the Andalusian cadence and more) in any major or minor key. Choose a capo and the page shows the shapes to play; it also lists the capo positions where every chord is an open chord. *Play along* counts in one bar and strums the chords in time (once per bar, every beat, or down and up), with the current bar, grip and notes lit up |
+| **Progressions** | Twelve well-known chord progressions (I–V–vi–IV, the 50s progression, ii–V–I, 12-bar blues, the Andalusian cadence and more) in any major or minor key. Choose a capo and the page shows the shapes to play; it also lists the capo positions where every chord is an open chord. *Play along* counts in one bar and strums the chords in time (once per bar, every beat, down and up, or the folk strum D DU UDU), with the current bar, grip and notes lit up. Loops can start on any of their chords. The **Acoustic Indie Folk-Pop** style (in the style of Vance Joy, Jonah Kagen, Sons of the East, Hollow Coves, Matthew Mole, Ocie Elliott, The Lumineers, Buffalo Traffic Jam, Henry and the Waiter, Jack and the Waiterman and Just Pete) has seven progressions with written-out voicings that show its spices: sus hammer-ons and pull-offs, anchor fingers on fret 3 of the B and e strings (G 320033, Cadd9 x32033, Em7 022033, Dsus4 xx0233), the borrowed iv, maj7 colours, falling bass lines with slash chords, the same loop started on vi or I, and G or C shapes with a capo. Its shapes stay fixed and the capo sets the key |
 | **Metronome** | A plain metronome (30–260 BPM, 2 to 7 beats per bar, up to four notes per click, accent, tap tempo, click volume) and eight guided exercises that set it up for you: subdivision ladder, gap click, click on 2 and 4, click on the offbeat, speed trainer, spider (the neck shows the note to play in time), burst, and one minute changes with your results kept in the browser |
 | **Ear training** | Intervals, or chord qualities, weighted towards the items you miss most |
 | **Tuner** | Tune the guitar, hit a target note with your voice or instrument, or guess a note by ear |
@@ -94,7 +94,7 @@ Profiles have no passwords. This is meant for one computer or a home network, no
 
 ```bash
 pytest -q                 # backend: 17 tests
-node verify_notes.mjs     # theory, shapes, progressions, rhythm, sound and pitch detection: 8242 checks, about 20 seconds
+node verify_notes.mjs     # theory, shapes, progressions, rhythm, sound and pitch detection: 9283 checks, about 20 seconds
 ```
 
 `verify_notes.mjs` loads `static/theory.js`, the same file the page uses, and checks it against
@@ -126,6 +126,10 @@ hand-written expected answers:
     numerals agree with the chords of the key in every key and with every capo
 20. Metronome patterns: clicks and subdivisions in a beat, 2 and 4, offbeat, gap click, speed trainer,
     subdivision ladder, tap tempo, the spider pattern and the click sound
+21. Acoustic Indie Folk-Pop: every written-out grip is exactly its chord with the right bass note, the
+    anchor grips are G 320033, Dsus4 xx0233, Em7 022033 and Cadd9 x32033 with fret 3 on B and e in all
+    of them, the falling bass lines (C B A G F E D, G F# E C), the borrowed Cm in G, the sus decorations
+    move one finger at a time, and the capo for each key with G and C shapes
 
 Random noise uses a fixed seed, so every run gives the same result.
 
@@ -180,4 +184,12 @@ The expected answers in `verify_notes.mjs` follow these references:
   speed trainer, [Musokit, speed trainer](https://musokit.com/speed-trainer);
   spider exercise, [Guitar World, the spider exercise](https://www.guitarworld.com/lessons/spider-exercise);
   one minute changes, [JustinGuitar, One Minute Changes](https://www.justinguitar.com/guitar-lessons/one-minute-changes-f1-im-112)
+- Acoustic Indie Folk-Pop spices: sus and add embellishments, [Acoustic Guitar](https://acousticguitar.com/guitar-basics-how-to-use-sus-and-add-embellishments-with-open-chord-shapes/);
+  G, Cadd9, Em7, Dsus4 and D/F♯ as the core folk chords, [Guitarwiz, folk chord progressions](https://guitarwiz.app/articles/folk-chord-progressions/);
+  the borrowed minor iv, [StudyBass, borrowed chords](https://www.studybass.com/lessons/harmony/borrowed-chords/);
+  slash chords and falling bass lines, [Acoustic Guitar, slash chords](https://acousticguitar.com/strengthen-chord-progressions-and-bass-lines-with-slash-chords/);
+  the wistful sound of maj7 chords, [Strum Avenue, 7th chords](https://strumavenue.com/guitar-7th-chords/);
+  the same four chords rotated for another mood, [Pianote, chord progressions for mood](https://www.pianote.com/blog/chord-progressions-for-mood/);
+  the folk strum, [Good Guitarist, strumming patterns](https://goodguitarist.com/common-guitar-strumming-patterns/);
+  the capo and open chords, [Guitar World, capo](https://www.guitarworld.com/lessons/how-a-capo-can-make-5-classic-songs-easier-to-play)
 - YIN pitch detection: de Cheveigné and Kawahara (2002), [YIN, a fundamental frequency estimator for speech and music](http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf)
