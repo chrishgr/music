@@ -20,7 +20,8 @@ const T = new Function(`
            capoChord, triadVoicings, naming, SHAPES, SHAPE_ORDER, CAGED_QUALITIES, CAGED_SCALE, gripOf,
            shapeInstances, chordShapes, positionMidis, scalesContaining, diatonicChords, MINOR_ROOTS,
            PROGRESSIONS, progressionChords, progressionBars, capoSuggestions, openGrip, keyName,
-           beatClicks, trainerBpm, isSilentBar, ladderStep, tapTempo, spiderNotes, synthClick };
+           beatClicks, trainerBpm, isSilentBar, ladderStep, tapTempo, spiderNotes, synthClick,
+           GENRES, rotateProgression, familyCapo, progressionAnchors, parseGrip };
 `)();
 
 let passed = 0, failed = 0;
@@ -65,7 +66,7 @@ const chords = [
   ['A', 'maj', ['A', 'C#', 'E']], ['C', 'min', ['C', 'Eb', 'G']], ['B', 'dim', ['B', 'D', 'F']],
   ['C', 'aug', ['C', 'E', 'G#']], ['G', '7', ['G', 'B', 'D', 'F']], ['Db', 'maj7', ['Db', 'F', 'Ab', 'C']],
   ['F#', 'm7b5', ['F#', 'A', 'C', 'E']], ['B', 'dim7', ['B', 'D', 'F', 'Ab']], ['D', 'sus4', ['D', 'G', 'A']],
-  ['A', 'mmaj7', ['A', 'C', 'E', 'G#']], ['C', 'maj7s5', ['C', 'E', 'G#', 'B']]
+  ['A', 'mmaj7', ['A', 'C', 'E', 'G#']], ['C', 'maj7s5', ['C', 'E', 'G#', 'B']], ['C', 'add9', ['C', 'E', 'G', 'D']]
 ];
 for (const [root, id, exp] of chords) check(`${root}${id}`, spellAll(root, T.CHORDS.find(c => c.id === id).iv), exp);
 
@@ -211,7 +212,7 @@ for (const [iv, name] of Object.entries(NAMED)) {
 console.log('11. Chord formulas and scale step patterns');
 const CHORD_SEMIS = { maj: [0, 4, 7], min: [0, 3, 7], dim: [0, 3, 6], aug: [0, 4, 8], sus2: [0, 2, 7], sus4: [0, 5, 7],
   '7': [0, 4, 7, 10], maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], m7b5: [0, 3, 6, 10], dim7: [0, 3, 6, 9],
-  mmaj7: [0, 3, 7, 11], maj7s5: [0, 4, 8, 11] };
+  mmaj7: [0, 3, 7, 11], maj7s5: [0, 4, 8, 11], add9: [0, 4, 7, 14] };
 for (const c of T.CHORDS) check(`chord ${c.id} formula`, c.iv.map(iv => T.IV[iv][0]), CHORD_SEMIS[c.id]);
 const STEPS = { major: 'WWHWWWH', minor: 'WHWWHWW', dorian: 'WHWWWHW', phrygian: 'HWWWHWW', lydian: 'WWWHWWH',
   mixolydian: 'WWHWWHW', harmminor: 'WHWWH3H' };
@@ -419,7 +420,7 @@ for (const p of T.PROGRESSIONS) for (let k = 0; k < 12; k++) {
     const ok = T.progressionChords(p, k, capo).every(c => ((pcOf(c.root) - pcOf(c.shapeRoot)) % 12 + 12) % 12 === capo);
     check(`${p.id} in ${key} with capo ${capo}: shapes are ${capo} semitones lower`, ok, true);
   }
-  if (p.id === 'blues' || p.id === 'rock') continue;
+  if (p.id === 'blues' || p.id === 'rock' || p.genre) continue;   // the styles use sus, add9 and borrowed chords on purpose
   for (const c of T.progressionChords(p, k)) {
     const deg = T.IV[c.iv][1] - 1, seventh = T.CHORDS.find(x => x.id === c.q).iv.length === 4;
     const scale = p.mode === 'major' ? 'major' : c.iv === '5' ? 'harmminor' : 'minor';
@@ -459,6 +460,60 @@ check('spider stays on frets 5 to 8, finger = fret - 4', spider.every(n => n.f >
 const click = T.synthClick(1100, 48000).samples;
 check('click starts loud', Math.max(...click.slice(0, 240).map(Math.abs)) > 0.5, true);
 check('click has died away at the end', Math.max(...click.slice(-240).map(Math.abs)) < 0.01, true);
+
+// 21. Acoustic Indie Folk-Pop. The grips are written out by hand from the chord charts of the style;
+//     the checks make sure each grip is exactly its chord, with the right bass note.
+console.log('21. Acoustic Indie Folk-Pop');
+check('ninth is called M9, 14 semitones', [T.intervalName('9'), T.IV['9'][0]], ['M9', 14]);
+check('C add9 is spelled C E G D', spellAll('C', ['1', '3', '5', '9']), ['C', 'E', 'G', 'D']);
+const folk = T.PROGRESSIONS.filter(p => p.genre === 'folkpop');
+check('seven folk-pop progressions', folk.length, 7);
+const NAMES_PLAIN = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+for (const p of folk) {
+  check(`${p.id}: one grip per chord`, p.grips.length, p.chords.length);
+  check(`${p.id}: suggested capo is 2 to 5, as in the style`, p.capo >= 2 && p.capo <= 5, true);
+  const chords = T.progressionChords(p, pcOf(p.family), 0);
+  for (const c of chords) {
+    const ms = c.grip.map((f, st) => f === null ? null : T.TUNING[st] + f).filter(m => m !== null);
+    const need = T.CHORDS.find(x => x.id === c.q).iv.map(iv => (pcOf(c.root) + T.IV[iv][0]) % 12);
+    const pcs = ms.map(m => m % 12);
+    check(`${p.id} ${plain(c.symbol)}: only chord tones, all of them`, pcs.every(x => need.includes(x)) && need.every(x => pcs.includes(x)), true);
+    check(`${p.id} ${plain(c.symbol)}: lowest note is the ${c.bass ? 'bass note' : 'root'}`, Math.min(...ms) % 12, pcOf(c.bass || c.root));
+  }
+}
+const fp = id => T.PROGRESSIONS.find(p => p.id === id);
+const fpSyms = (id, key, capo, field = 'symbol') => T.progressionChords(fp(id), pcOf(key), capo).map(c => plain(c[field]));
+const lowest = id => T.progressionChords(fp(id), pcOf(fp(id).family), 0).map(c => NAMES_PLAIN[Math.min(...c.grip.map((f, st) => f === null ? 99 : T.TUNING[st] + f)) % 12]);
+check('anchor grips are G 320033, Dsus4 xx0233, Em7 022033, Cadd9 x32033', fp('fp-anchor').grips, ['3 2 0 0 3 3', 'x x 0 2 3 3', '0 2 2 0 3 3', 'x 3 2 0 3 3']);
+check('anchor fingers: fret 3 on the B and high e strings', T.progressionAnchors(fp('fp-anchor')), ['4:3', '5:3']);
+check('anchor loop with capo 2 sounds in A', fpSyms('fp-anchor', 'A', 2), ['A', 'Esus4', 'F#m7', 'Dadd9']);
+check('anchor loop with capo 2 is fingered in G', fpSyms('fp-anchor', 'A', 2, 'shapeSymbol'), ['G', 'Dsus4', 'Em7', 'Cadd9']);
+check('anchor loop started on vi', T.progressionChords(T.rotateProgression(fp('fp-anchor'), 2), pcOf('G'), 0).map(c => plain(c.symbol)), ['Em7', 'Cadd9', 'G', 'Dsus4']);
+check('rotation keeps each voicing with its chord', T.rotateProgression(fp('fp-anchor'), 2).grips, ['0 2 2 0 3 3', 'x 3 2 0 3 3', '3 2 0 0 3 3', 'x x 0 2 3 3']);
+check('borrowed iv in G: C then Cm', fpSyms('fp-borrowed', 'G', 0), ['G', 'Dsus4', 'Em7', 'C', 'Cm']);
+const bor = T.progressionChords(fp('fp-borrowed'), pcOf('G'), 0);
+check('Cm is marked borrowed, C is not', bor.map(c => c.borrowed), [false, false, false, false, true]);
+check('C and Cm share a bar, two beats each', bor.slice(3).map(c => [c.beat, c.beats]), [[12, 2], [14, 2]]);
+check('falling bass line in C: C B A G F E D, then G', lowest('fp-walkdown-c'), ['C', 'B', 'A', 'G', 'F', 'E', 'D', 'G']);
+check('falling bass chords in C', fpSyms('fp-walkdown-c', 'C', 0), ['C', 'G/B', 'Am', 'G', 'F', 'C/E', 'Dm7', 'G']);
+check('walk-down in G: bass G F# E C', lowest('fp-walkdown-g'), ['G', 'F#', 'E', 'C']);
+check('walk-down in G with capo 3 sounds Bb F/A Gm7 Ebadd9', fpSyms('fp-walkdown-g', 'Bb', 3), ['Bb', 'F/A', 'Gm7', 'Ebadd9']);
+check('maj7 colours in G', fpSyms('fp-maj7', 'G', 0), ['Gmaj7', 'Cmaj7', 'Em7', 'D']);
+check('Gmaj7 has F# (the major seventh) on top', NAMES_PLAIN[(64 + T.parseGrip(fp('fp-maj7').grips[0])[5]) % 12], 'F#');
+check('Cmaj7 gets its seventh from the open B string', T.parseGrip(fp('fp-maj7').grips[1])[4], 0);
+check('sus decorations in D', fpSyms('fp-sus', 'D', 0), ['D', 'Dsus4', 'D', 'Dsus2', 'G', 'A', 'Asus4', 'A', 'Asus2', 'D']);
+check('sus progression lasts four bars', T.progressionBars(fp('fp-sus')), 4);
+const sus = T.progressionChords(fp('fp-sus'), pcOf('D'), 0);
+for (const c of sus.filter(c => c.hammer)) {
+  const prev = sus[c.i - 1].grip, moved = c.grip.filter((f, st) => f !== prev[st]).length;
+  check(`${plain(c.symbol)} is one finger moved from ${plain(sus[c.i - 1].symbol)}`, moved, 1);
+}
+check('melancholic start on vi in C', fpSyms('fp-melancholy', 'C', 0), ['Am7', 'Fmaj7', 'C', 'G']);
+check('capo for a key, G shapes: A is capo 2, Bb capo 3', [T.familyCapo(fp('fp-anchor'), pcOf('A')), T.familyCapo(fp('fp-anchor'), pcOf('Bb'))], [2, 3]);
+check('capo for a key, C shapes: Eb is capo 3, F capo 5', [T.familyCapo(fp('fp-walkdown-c'), pcOf('Eb')), T.familyCapo(fp('fp-walkdown-c'), pcOf('F'))], [3, 5]);
+const style = T.GENRES.find(g => g.id === 'folkpop');
+check('every spice opens a folk-pop progression', style.spices.every(s => folk.some(p => p.id === s.prog)), true);
+check('the style lists the eleven artists', style.artists.length, 11);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

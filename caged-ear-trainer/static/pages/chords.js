@@ -2,7 +2,7 @@
    and the neck, the piano and every Play button then use exactly that grip. */
 const CH = { sel: null, playing: null };   // sel: index of the chosen grip. playing: the grip sounding during "Play every grip"
 const TRIAD_TYPES = ['maj', 'min', 'dim', 'aug', 'sus2', 'sus4'];
-const SEVENTH_TYPES = ['7', 'maj7', 'm7', 'm7b5', 'dim7', 'mmaj7', 'maj7s5'];
+const SEVENTH_TYPES = ['7', 'maj7', 'm7', 'm7b5', 'dim7', 'mmaj7', 'maj7s5', 'add9'];
 const CHORD_NOTES = {
   maj: 'A major triad is the root, the major third (4 semitones up) and the perfect fifth (7 semitones). It is the I, IV and V chord of a major key.',
   min: 'A minor triad is the root, the minor third (3 semitones up) and the perfect fifth. It is the ii, iii and vi chord of a major key.',
@@ -16,7 +16,8 @@ const CHORD_NOTES = {
   m7b5: 'A diminished triad with a minor seventh, also written ø7. It is the viiø7 chord of a major key and the iiø7 chord of a minor key.',
   dim7: 'A diminished triad with a diminished seventh, nine semitones above the root: four notes three semitones apart. Moving a grip three frets gives the same four notes.',
   mmaj7: 'A minor triad with a major seventh. It is the first chord of the harmonic minor scale when you stack sevenths.',
-  maj7s5: 'An augmented triad with a major seventh. It is the III+maj7 chord of the harmonic minor scale.'
+  maj7s5: 'An augmented triad with a major seventh. It is the III+maj7 chord of the harmonic minor scale.',
+  add9: 'A major triad with the ninth added on top, the same note as the second but an octave higher. Unlike sus2 it keeps the third, so it stays major but sounds more open. Common in acoustic pop, for example Cadd9.'
 };
 const chordGrips = () => chordShapes(rootPc(), state.chord);
 function gripIndex(vs) {

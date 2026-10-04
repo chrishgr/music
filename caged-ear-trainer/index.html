@@ -143,7 +143,7 @@
         <div class="chips" id="chTypes3" role="group" aria-labelledby="lbl-ch3"></div>
       </div>
       <div class="field">
-        <span class="lbl" id="lbl-ch4">Seventh chords</span>
+        <span class="lbl" id="lbl-ch4">Sevenths and add9</span>
         <div class="chips" id="chTypes4" role="group" aria-labelledby="lbl-ch4"></div>
       </div>
     </div>
@@ -348,8 +348,17 @@
       <p class="lede">Well-known progressions in any key. With a capo the page shows which shapes to play, and Play along strums the chords in time so you can practise the changes.</p>
     </div>
     <div class="field">
+      <span class="lbl" id="lbl-pggenre">Style</span>
+      <div class="seg" id="pgGenre" role="group" aria-labelledby="lbl-pggenre"></div>
+    </div>
+    <div class="genre" id="pgGenreInfo" hidden></div>
+    <div class="field">
       <span class="lbl" id="lbl-pg">Progression</span>
       <div class="chips" id="pgList" role="group" aria-labelledby="lbl-pg"></div>
+    </div>
+    <div class="field" id="f-pgstart">
+      <span class="lbl" id="lbl-pgstart">Start on</span>
+      <div class="seg" id="pgStart" role="group" aria-labelledby="lbl-pgstart"></div>
     </div>
     <div class="controls">
       <div class="field">
@@ -385,7 +394,7 @@
       <div class="field">
         <span class="lbl" id="lbl-pgstrum">Strumming</span>
         <div class="seg" id="pgStrum" role="group" aria-labelledby="lbl-pgstrum">
-          <button data-v="bar">Once per bar</button><button data-v="beats">Every beat</button><button data-v="eighths">Down and up</button>
+          <button data-v="bar">Once per bar</button><button data-v="beats">Every beat</button><button data-v="eighths">Down and up</button><button data-v="folk">Folk strum (D DU UDU)</button>
         </div>
       </div>
       <label class="check"><input type="checkbox" id="pgClick"> Metronome click</label>
